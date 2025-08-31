@@ -622,6 +622,877 @@ OKK 第六，单测显示，perception对最新environment的relation和messageh
 perception做了很多协同改动
 
 
+0818开会内容
+需求：plan要求最终返回不是xxx.xxx.xxx 要改成统一的type:xx等等 并列的字典属性
+
+问题 sys初始化的时候有依赖树 agent依赖action和env  但是action初始化依赖agent实例列表 有循环引用问题：解决：局部加载action init里不需要先写agent列表
+
+action能否直接调LLM的工程实现思考：全部塞到agent的prompt太复杂 例如交流文本生成等最好放到action中 action根据传递过来的agent属性再组织好消息并发送  这样plan专注于组织行为本身，   至于这坨prompt是否要放到agent的某个插件下调LLM 无所谓 本质上这坨代码放哪都一样。只是思想问题  工程上没区别
+
+timer的问题 先定义逻辑帧  物理时间 超时等降级容灾问题交给k8s或者后续分布式再考虑
+
+plan怎么与timer结合的问题：首先明确 plan的每个step没有脑内思考 每个step只会调用具体的action   具体的action会一次性得到所有脑内状态 
+借鉴societyagent.py 应该是每次先拿到完整plan  然后检查plan是否做完  如果没做完 才读取目前执行到哪步，【对于更新  商量后考虑时间轮算法 全局一个timer轮 agent主动塞step到将来的一个tick中  到期就sys主动给agent发消息说next_step即可    然后业务上只关心物理时间模拟效率：通过LLM返回延迟减少  通过每个tick并行更新每个agent即可】
+很多ray框架的实现都是很多group并行 group内是几个agent串行 所以效率还好
+
+【本质上现在plan的每个step都是一个具体的动作 然后调用动作时 现在action传递预估tick 给sys  sys再调用对应agent的run 
+TODO  所以现在agent里的run被调用时要去判断：检查plan是否做完  如果没做完 才读取目前执行到哪步 然后agent的run里主动调用next step即可】
+
+
+
+
+
+
+0819开发内容
+
+OKK 需求一：统一计划 (Plan) 格式
+在 `LinearPlannerPlugin.py` 中，修改 `_default_plan_generation` 方法，以生成新的 `step` 格式。
+
+OKK 需求二：重构 Agent 和 Planning 逻辑
+类比ENV 现在在agent类中注入了action的引用 并存储为 `self.action`。
+在添加 `PlanningComponent` 时，将 `self.action` 注入到该组件中。
+在 `PlanningComponent` (`planning.py`) 中，添加 `is_plan_completed` 方法，用于检查其插件的计划整体是否完成。
+
+在 `Agent` 基类 (`agent_base.py`) 中，重构 `run()` 方法，根据计划完成状态决定执行路径。【核心】 具体而言
+如果计划已完成，则按顺序执行 `perception`, `reflection`, `planning`；否则，只执行 `planning` 组件的 `execute()`。
+
+在 `PlanningComponent` 的`execute` 中，实现单步执行逻辑：
+细节：如果计划为空则先生成计划，再读取并执行第一个step。（不要直接标记完成step！）
+如果有计划且计划未完成，则在`execute` 调用时先去调用插件的 `complete_step()` 标记当前步完成并推进计划。
+a. 从插件获取当前步骤 (`get_next_step`)。【a1 如果计划最后一步在此时标记完成 后续没有step了，就标记整个计划完成 并直接return】
+b. 读取step的格式
+c. 使用注入的 `self.action` 实例和 `getattr` 来动态查找并执行 `action` 模块中某个的具体方法。
+
+OKK 需求三：编写和运行单元测试
+
+
+【目前communication如何生成消息经过工程考虑还是放到了action中实现】
+【system中timer的问题 先定义逻辑帧  物理时间 超时等降级容灾问题交给k8s或者后续分布式再考虑】
+【明确 plan的每个step没有脑内思考 每个step只会调用具体的action   具体的action会一次性得到所有脑内状态 】
+【本质上plan的每个step都是一个具体的动作 然后调用动作时 现在action传递预估tick 给sys  sys再调用对应agent的run 】
+【plan怎么与timer结合的问题：借鉴societyagent.py 应该是每次先拿到完整plan  然后检查plan是否做完  如果没做完 才读取目前执行到哪步，【对于更新  商量后考虑时间轮算法 全局一个timer轮 agent主动塞step到将来的一个tick中  到期就sys主动给agent发消息说next_step即可    然后业务上只关心物理时间模拟效率：通过LLM返回延迟减少  通过每个tick并行更新每个agent即可】】
+【很多ray框架的实现都是很多group并行 group内是几个agent串行 所以效率还好】
+
+
+
+【问题 action模块需要接受固定格式的某个agent_id的某个step字典 生成预计花费tick 并且执行 并且告知sys已完成执行 sys在将来某个tick再调用某个agent的run完成循环】
+【ans 直接类比environment实例，把action的引用传递给agent类，然后向下传递给plan组件和具体的plan插件，用于调用action中的具体方法。每个step的字典结构不变】
+
+【细节问题 某次调用agent的run()后 发现计划在此时完全结束 那么直接return不动，等下次run再从头生成新计划；还是说直接开始新的一轮感知 反思 计划？】
+【GPT的回答 两种都可 无非sys多主动调一次run()    但是为了未来做因果/回滚  为了强调公平与可重复性，避免单个 Agent 在一轮里“吃掉”算力导致顺序偏置
+  结论：完成一个计划后 yield，  每个 tick下agent 最多一次 act；计划结束后不能在同一 tick 开新计划。】
+
+
+
+
+
+0820开会内容
+TODO 拉取最新的main action和sys都更新了
+TODO 晚上拉一下main  然后vscode连一下服务器的代码 有git   run一下 服务器明天会装redis
+
+TODO 现在
+action被agent调用的就是action.py下的get_method和run方法。
+现在agent的plan插件中要调用action执行动作了。
+首先，plan插件中需要调用大模型。在prompt之前先有一些静态的方法，比如sleep等，可以去action的具体方法中找到。然后将sleep等作为参数，去调用action.py的get_method ，传入方法或者方法list 能够返回方法的描述 
+然后，将获取到的方法和描述作为固定参数传给生成plan的大模型的prompt。
+然后按照目前的固定格式生成计划字典（现在可以先假设一个模型的固定字典返回 与现在的plan插件结果完全一样，直接在现有的插件上改）。
+然后根据每个step，每次plan执行的时候，运行到这个step，就把step字典中除了module的剩下三个参数传给action.run() 例如有些动作要agent id 就直接把id作为param参数传递给action的run即可。  交给plan的组件exe来单步执行
+
+一些讨论：
+sys下 需要兼容任务调度（无tick）和社会模拟（有tick）
+因此需要两套timer 通过配置来选择
+具体来说  agent的run不动   无非是现在action要么生成tick要么生成flag(任务是否结束的标志) 告知sys  然后sys按照action的参数去env查询关系图或者任务调度图去调下一个agent的run即可。
+
+TODO 周五前接入一下llm文件下的API  目前还没有写好
+
+TODO 将来为了支持任务调度 agent要在一整个plan完成后调用一下将来action的finish()方法 目前还没有写好
+
+TODO 将来sys需要留出一个运行时线程 用来社会模拟的可视化 尤其是地图坐标 移动 aoi等问题即可  目前还没有写好
+
+
+
+0820开发内容
+TODO  
+OKK  一、现在怎么遍历得到action下的具体方法的string 然后作参数列表 在plan插件中根据列表  调用action的get_method获取描述  传给prompt？
+OKK  二、plan模块按照step执行时每个step都应该调用action的run()并传递对应参数，放到了plan的组件的exe中
+OKK  三、 现在agent的每个adapter等细节问题都没有经过DB 验证   agent初始化时需要将自己的id等放入每个组件的adapter等问题都没有经过验证
+
+目前已经通过所有agent下的单测 等待明天涟DB和联调
+
+
+0821 开发内容
+这个message感知插件OKK 
+第一，这个插件中应该具有一个临时的优先级的队列作为插件属性，存的是message和priority构成的结构，并支持按照priority参数进行排序，
+第二，要求完善add_message方法，这个方法最终要action这个外部模块来调用，参数是传入的message，函数内会把这个新message再加上一个priority存储到这个队列中，且同时直接按照格式存到此插件的adapter中，history供其他函数如get_message调用。
+第三，这个队列要支持消费消息的一个函数，这个函数会按照最高优先级拿到队列中的第一条消息，供plan调用，同时删除队列中的这个消息。 
+【要单元测试】
+此外 relation的感知插件【要单元测试】
+
+此外 
+现在agent大类的run()方法应该返回一个预计耗时：tick:整数。这个整数应该从其下的planning组件的execute中执行的return得到 然后这个return又要通过action.run（）方法的返回得到，怎么完成这个链式return？注意现在在最底下的action.run（）方法先固定返回一个tick=1的固定return OKK   
+
+
+此外 
+toolkit现在有LLM的调用方法了  怎么在agent模块中先新建一个统一的LLM实例
+然后传递给其下的每个组件  组件传递给每个插件用于使用？ 
+然后扫描agent下的每个具体插件 如果函数里用到了LLM 则使用这个实例来生成文本？
+可以了  【有task=xxx的问题 是否要系统提示词因agent而不同 要思考一下】
+目前agewnt下只有plan和reflection要用到LLM   
+
+开发运行问题：很多相对import的问题
+TODO 现在已经有原始版本  本地run simulation文件  然后自己修各种问题 明天再提交讨论
+
+晚上连接上服务器 联调   8-10点半  结束  基本没问题了  能跑通到agent计划与action联动
+【明天遍历action的功能写好到plan即可】
+
+
+
+
+0822 开会内容
+1 计划不应该一次性生成 创建的第一次 应该先拿到各种感知和反思
+2 在step执行的时候 再去感知一下消息 然后再get一下action的具体get_method
+然后再get一下上一步的结果 （已经存到state中）   然后再改一下下一步的step的参数 再进行执行。okkk
+
+总体规划：
+下周五前完善框架
+场景确定：xx学校的1老师和4学生 只有profile一样  目标是一天完成自定义的plan
+
+0823 开发内容
+TODO
+组件要求最简介化 且 不动
+    要求插件外都要统一 
+个人就先做agent的一整套plugin的逻辑  OKK
+
+
+OKK  一、agent的reflect即反思要支持通过adapter存取 尤其是每个plan完成后要存 plan前要取
+OKK  二、PLAN的优化 
+首先要求把现有所有plan组件内的方法移动到插件
+plan组件只留exe返回int  然后调用时去执行插件的exe 然后所有逻辑在插件的exe中写
+OKK  三、计划线性执行的逻辑的基础上
+要求最开始先生成agent一天的大纲 然后执行的每步都传递现有的各种组件和原始大纲内容 
+以便根据最新的情况，并标记当前执行的step，动态生成新的完整大纲【注意，整个计划会重新生成。包括生成完全一致的已经做过的step】，并在新大纲中找到当前执行到的step，并开始按照新大纲的新后续step执行之后的step。
+OKK  【然后设计巧妙的prompt，用于约束agent在生成计划的时候尽量以原始大纲为准，突发事件导致的新plan不应该偏差太多】
+
+四、对上述每点的优化都做一个单元测试 写到agent的test对应文件内并执行 -B
+
+
+
+
+【问题1  计划完成后的反思的时间应该由sys传递 才能知道虚拟世界的时间 目前reflect插件用datetime是不对的】
+【问题2 现在动态生成一天计划后发现目前的action的具体方法太少 需要在action里加 以便支持】
+【问题3 现在伴随着plan过长的【偶现】时 LLM返回被强制截断的问题 然后伴随json解析问题
+OKK  修改qwen.py的max token进行解决
+【偶现】[APIModel]-[QwenProvider]-[qwen-plus-latest] 请求失败: HTTPSConnectionPool(host='dashscope.aliyuncs.com', port=443): Read timed out. (read timeout=15)
+OKK 很多简单动作或者无参动作应该绕过参数优化步骤 以便提高效率】
+
+【问题4 每tick遍历更新agent遇到显著的同步性能问题 将来调整】
+
+
+
+既然已经有一天的大纲 那么虚拟世界的天的概念怎么统一 
+时间上去规定每个tick是虚拟世界的一小时
+
+
+0825会议内容
+ans:
+第一 现在action的result是一个字典 既有tick  又有动作返回  要在plan里接受一下
+第二 agent要提供接受全局tick的方法供sys调用  用于共享tick  然后每24tick去反思一下或者怎么样【TODO 这个set global tick的方法和定时反思 也是可变的 在agent下  我先改好 等mj来加】
+第三【 TODO 】plan的prompt可以看一眼dr的分支
+然后要求大纲先不生成每步骤参数，而是在每步骤执行的时候再根据大纲生成具体参数 并生成是否要修改大纲的提示。
+【然后验证一下反思 state是否会存到数据库 是否能在plan的时候打印出来验证一下 
+其他人做：state和profile在初始化的时候要个性化一点 并且state的值要和action的修改适配 要改action方法  需要什么state可以自己去对应的action里改】
+【TODO 可以试试每个step结束后 交给plan插件下的LLM 去决定这一步做完之后本人的state怎么改。  去试试 因此现在动作result=tick和结果param。因此每步最终要做：改大纲，改参数，只是多加一步是否改state的LLM判断即可。 】
+
+
+ans:要求只有框架开发者可以创造新组件  目前先不动
+ans:师兄做：目前用户可编辑部分独立出mas  因此agent基类要像action一样 就叫agent.py然后移动一下目录
+ans:目前toolkit下llm和mcp希望只通过配置文件 本身不改  但是toolkit下的adapter
+还有项目布局
+
+
+
+ans:下次开会 周三 搞单机的异步写法
+
+
+
+
+
+0826会议内容
+核心是要求组件界限明确
+1、OKK  plan插件里的很多插件都应该在其他组件里写 这样plan插件就会很少
+2、OKK  需要单独一个action组件 好处是有独立存储 独立运行 也让plan很少 评估tick也可以个性化放这个组件中   因此一个step也可以做多个action
+总结12就是划分每个组件的生命周期  例如plan的所有主动反思都交给反思组件exe来主动做
+【ans step格式也不一定要统一  我们先提供一套 总之】
+3、OKK  plan组件不需要set action  直接init做
+3、OKK  现在跨组件直接用self.agent 不需要再self.env  现在的id name description等agent属性都不需要
+
+
+最终TODO 0826晚上开始自己完全按照要求重构Agent  明天让dr进行运行和debug
+0826开发内容
+一、OKK 新建acting的组件和插件
+二、OKK 功能解耦重构 简化plan插件 执行方法移动到act插件，
+三、OKK  agent内统一跨插件调用方式  插件直接通过self.component.agent.get_component("其它组件名").get_plugin("其它插件名")得到
+四、OKK  agent外统一跨模块调用方式  插件直接通过self.component.agent.动作或环境 拿到实例引用
+五、 OKK agent不再具有基础属性 id name description全部放到profile中描述
+【但是sys初始化依然会赋值 因此采用可选参数的写法 实在要删除需要sys协同】
+六、 OKK   action接收动作返回为字典 因此agent.run()也统一返回带tick的字典 要sys接收
+七、 OKK 修改每日plan和执行和动态更新逻辑
+ 7.1 LinearPlannerPlugin专注于：一次性生成【完整带参】初始计划。
+作为状态机：存储当前计划、追踪执行到了哪一步。
+提供接口 允许 Act 插件读取和完全替换整个计划。
+集中管理和暴露计划的状态。
+ 7.2 LinearActPlugin 真正执行与动态决策
+ 直接调用 planner 插件的新方法来获取计划、获取当前步骤，并在动作成功后通知 planner推进计划。
+执行任何动作之前，收集评估所有信息（感知 plan 状态等组件、自身上一步的结果）。
+【可选】决策是否重规划 如需要则调用 Planner 插件生成全新计划
+执行：从 Planner 获取当前步骤并执行。
+更新状态：执行结果存入act的 adapter（用于历史追溯），并更新 State 插件中的相关状态。
+推进计划：通知 Planner 当前步骤已完成。
+return 当前步的结果字典
+
+【伴随问题 config的导入 sys的run字典返回的接受格式  sys对环境的调用格式  action的先注册后使用问题】
+【提交问题  个人分支的merge main前一个节点可顺利运行  目前main分支由于仍在修改 暂时无法运行】
+
+
+0827开会内容
+TODO 现在state要求强制加一个execute  然后反思组件也要求这样  然后最终要求每个插件的最后一步要统一把运行时内存统一通过adapter持久化
+并且是否重新plan不要在act中  就在plan中的execute中直接加
+DEBUG plan 这边加一个关系感知 OKK
+DEBUG 感知要调用 且最终要在
+其它问题：
+
+个人TODO  协助师兄更改agent 明天开始拉取主分支写异步 然后周五同步一下 交给别人写应用即可
+
+下周前的计划：先异步 再分布式
+
+0828开发内容
+【TODO】 本地可执行
+但是每次提交需完全恢复三个文件的配置
+【examples\test\adapters\redis_graph_adapter.py】
+【examples\test\adapters\redis_kv_adapter.py】
+【examples\test\configs\adapters_config.yaml】
+
+目前Agent的执行逻辑：
+Agent.run() 均为 [单插件]
+├── 1. perception组件.execute()
+│   └── BasicPerceptionPlugin.execute()
+│       ├── 获取当前global_tick
+│       ├── 调用get_all_relations()获取关系信息
+│       ├── 构建perception_data并持久化到Redis
+│       └── 键名: "{agent_id}:perception"
+│
+├── 2. planning组件.execute()
+│   └── LinearPlannerPlugin.execute()
+│       ├── 检查是否需要重规划(基于新消息)
+│       ├── 如需要 → 调用LLM生成新计划
+│       ├── 如无计划 → 创建新的每日计划
+│       └── 持久化计划数据到Redis
+│
+├── 3. acting组件.execute() → 返回执行结果
+│   └── LinearActPlugin.execute()
+│       ├── 获取当前计划步骤
+│       ├── 调用LLM选择工具并执行
+│       ├── 工具执行: communication/other/tools
+│       ├── 判断成功/失败并更新步骤状态
+│       └── 返回消耗的tick数
+│
+├── 4. reflection组件.execute()
+│   └── InsightCreationPlugin.execute()
+│       ├── 获取消息并调用LLM生成洞察
+│       ├── 构建reflection_data
+│       └── 持久化到Redis: "{agent_id}:reflection"
+│
+└── 5. state组件.execute()
+    └── StateStoragePlugin.execute()
+        ├── 收集所有组件数据
+        ├── 调用LLM更新状态
+        └── 持久化到Redis: "{agent_id}:state"
+
+
+TODO 
+1 先要能跑 OKK
+2 针对目录结构不一致 需要根据redis进行目录调整 师兄已改OKK 
+3 再针对缺失或重复问题进行修改 OKK 
+
+目前redis中都是按照agent_id往下组织和存储的。
+adapter方面 plan act state的adapter都已经这样写好 可以参照，去改profile perception reflection的adapter，要按照id的层级组织和存储。
+此外 agent的其它五大组件 包括plan act profile perception reflection的存储并没有看到，需要在上述改好adapter的基础上，在agent.run并运行每个组件的exe的时候，针对每个单插件的exe的末尾，去使用adapter往redis存数据的操作
+
+4 求单独剥离每个组件exe的功能  插件间调用adapter的测试
+5 最终测试 完成对话 反思等功能 TODO
+
+【问题】action返回的tick过长 有时多达20tick 可以压缩到个位数 更容易推进模拟的状态
+【临时方案 在sun_simulation中改一行即可 固定tick=2  最终需要恢复 】
+
+【问题 
+无法接受到回复的问题  现象：多个tick后会有单方面的接受到队列中  但是被消费后 已经在计划中生成了description：“要关于xxx回复xxx” 但是最终无法进行回复
+一、plan或者profile提高对话欲望 强制每次对话
+二、独立验证perception下的add_message功能 OKK
+
+以统一格式组织conversation（*from id与to id 拼接的格式或其他格式 以便支持统一查询 一对一的公共列表）
+
+目前存两套消息的问题：
+BasicPerceptionPlugin.add_message() 在第69-84行存储到 chat_history:{agent_id}:{other_agent_id}
+MessageDispatcher.dispatch_message() 在第104-105行存储到 conversation:{uuid}
+【目前用不到这一套】
+
+三、修复new plan的问题  目前已经获取到新消息了 也完成reply动作  只是reply也需要持久化
+】
+关键打印：
+[DEBUG] MessageDispatcher: Delivering message to agent_002
+[DEBUG] BasicPerceptionPlugin: Agent agent_002 received message from agent_001: Hi Alice, I'm Emily. Let's 
+discuss your assignment and spark more curiosity!
+[DEBUG] BasicPerceptionPlugin: Added to priority queue. Queue size: 1
+
+
+[DEBUG] Executing chain step 0: communication.reply_message with params {'intention': 'respond to her feedback and discuss code review plans', 'to_id': 'teacher'}
+arguments {'agent_id': 'agent_002', **{'intention': 'respond to her feedback and discuss code review plans', 'to_id': 'teacher'}}
+arguments {'agent_id': 'agent_002', 'intention': 'respond to her feedback and discuss code review plans', 'to_id': 'teacher'}
+agent_002 is replying to teacher: I appreciate your feedback. Let's schedule a code review this week. I'm free after school.
+[DEBUG] Execution result: {'result': {'status': 'success'}, 'status': 'success'}
+[DEBUG] Step executed successfully, advancing step.
+
+
+TODO
+timestamp用tick不用物理时间
+如有必要 采用环境的conversation检索获取历史对话+自己对话  OKK 暂时没问题
+
+
+MAS包下的写法 返回的统一规范 错误处理  英文注释等
+【先用uv包的uvx的命令做 格式统一化】
+【异步 asyn问题 模型统一改】
+【分布式和RAY框架的问题 先去知乎查查 简单实践一下 
+然后对照agent society的ray代码看看 最后分模块写好  DDL月底】
+【DB目前只考虑单节点！】
+
+TODO 个人先关注main分支的更新 做一些代码整理修饰
+然后周末学一学RAY  准备下周开发
+
+
+RAY:
+Ray 是伯克利大学 RISELab 研发的一个简单高效的分布式开源通用计算引擎框架，为开发者提供了简单通用的API来构建分布式程序。特别优化了RL 主要用python操作
+支持动态拓扑 生态位上 类比大数据处理框架spark 三层架构 底层是集群管理 中层分布式计算核心 上层ML相关库 自动处理编排 容错 拓展 轻松地构建分布式程序，靠简单API来将计算任务分解为以下的计算原语来执行：（以下两段来自实验文档）
+Task：一个无状态的计算任务（函数表示）。Ray 允许异步执行任意函数。这些"remote function"（Task）的开销非常低，可以在毫秒内执行，并且可以自动向集群添加节点并调度任务，非常适合扩展计算密集型应用程序和服务。
+Actor：一个有状态的计算任务（类表示 拥有自己的状态和方法 ）。每个Actor是独立计算单元 Actor 模型是一个强大的异步编程范例（支持微服务），Actor 本质上是一个有状态的 Worker（或 service）。当一个新的 Actor 被实例化时，就创建一个新的 Worker，并将该 Actor 的方法调度到这个特定的 Worker，也可以对 Worker 的状态进行访问和修改。处理异构计算（时间差大的并行任务）
+进程间通信方式：某func.remote()可以全局拿到对象id 然后 ray.get(id)即可获取具体值
+Tune是一个中间层 帮助编排有限的硬件给更多的任务 队列进行
+RLLib是最顶层的
+Ray框架架构图
+```mermaid
+graph TB
+    subgraph "Ray Cluster"
+        subgraph "Head Node"
+            GCS[Global Control Service<br/>全局控制服务]
+            GS[Global Scheduler<br/>全局调度器]
+            RB[Raylet/Bootstrap<br/>引导服务]
+            OR[Object Repository<br/>对象仓库]
+        end
+        
+        subgraph "Worker Node 1"
+            subgraph "Node Components"
+                R1[Raylet<br/>节点管理器]
+                OS1[Object Store<br/>对象存储]
+                CS1[Core Worker<br/>核心工作进程]
+            end
+            
+            subgraph "Worker Processes"
+                WP1[Worker Process 1<br/>工作进程1]
+                WP2[Worker Process 2<br/>工作进程2]
+                WP3[Worker Process N<br/>工作进程N]
+            end
+            
+            subgraph "Tasks & Actors"
+                T1[Task 1<br/>任务1]
+                T2[Task 2<br/>任务2]
+                A1[Actor 1<br/>状态化Actor]
+                A2[Actor 2<br/>状态化Actor]
+            end
+        end
+        
+        subgraph "Worker Node 2"
+            subgraph "Node Components 2"
+                R2[Raylet<br/>节点管理器]
+                OS2[Object Store<br/>对象存储]
+                CS2[Core Worker<br/>核心工作进程]
+            end
+            
+            subgraph "Worker Processes 2"
+                WP4[Worker Process 1<br/>工作进程1]
+                WP5[Worker Process 2<br/>工作进程2]
+            end
+            
+            subgraph "Tasks & Actors 2"
+                T3[Task 3<br/>任务3]
+                A3[Actor 3<br/>状态化Actor]
+            end
+        end
+    end
+    
+    subgraph "Client"
+        RC[Ray Client<br/>Ray客户端]
+        UP[User Program<br/>用户程序]
+    end
+    
+    %% 连接关系
+    UP --> RC
+    RC --> GCS
+    GCS --> GS
+    GS --> R1
+    GS --> R2
+    R1 --> CS1
+    R2 --> CS2
+    CS1 --> WP1
+    CS1 --> WP2
+    CS1 --> WP3
+    CS2 --> WP4
+    CS2 --> WP5
+    WP1 --> T1
+    WP2 --> T2
+    WP3 --> A1
+    WP4 --> T3
+    WP5 --> A2
+    WP5 --> A3
+    
+    %% 对象存储连接
+    OS1 <--> OS2
+    OR <--> OS1
+    OR <--> OS2
+    
+    %% 节点间通信
+    R1 <--> R2
+    
+    %% 样式
+    classDef headNode fill:#e1f5fe
+    classDef workerNode fill:#f3e5f5
+    classDef client fill:#e8f5e8
+    
+    class GCS,GS,RB,OR headNode
+    class R1,OS1,CS1,R2,OS2,CS2 workerNode
+    class RC,UP client
+```
+总体是经典的主从节点框架
+全局调度和状态管理都在master 底层是redis存储
+每个从节点Node会有一个本地调度和多个worker【进程】  并且有object store 用于进程间共享obj
+写法：装饰器 @ray.remote
+另外 字节在开源社区针对Ray 贡献了Kuberay 项目，用于Ray 集群的k8s部署管理。
+
+
+
+首先参考agent society论文源码中RAY的写法：
+一、任务并行化。 AgentSociety 作为总控制器，将任务（如智能体行为更新、信息收集）分发给各个 AgentGroup Actor，并使用 asyncio.gather 等待所有任务并行完成
+二、资源解耦。
+数据库写入: 创建了一个 PgWriter Actor 池，多个 AgentGroup Actor 可以共享这些 Writer，避免了数据库连接的瓶颈，并实现了异步写入。【类似adapter】
+消息处理: MessageInterceptor 作为一个独立的 Actor 运行，专门负责拦截和处理智能体间的消息，与智能体自身的逻辑解耦。【类似dispatch】
+三、通信。
+Actor 句柄 (ObjectRef): 组件之间不直接持有对象实例，而是通过 Ray 的 ObjectRef（Actor 句柄）进行远程方法调用。
+分布式队列 (ray.util.queue.Queue): 用于在 AgentSociety 主进程和 MessageInterceptor Actor 之间传递消息，实现了解耦的异步通信。
+
+四、具体过程
+- a 根据配置创建三类核心 Actor：
+AgentGroup Actor：将大量智能体分组，每个组由一个 AgentGroup Actor 管理。
+PgWriter Actor：创建了一个 Actor 池，用于并行写入 PG 。
+MessageInterceptor Actor：创建单个 Actor 用于消息拦截。
+任务分发: AgentSociety 的许多方法（如 gather, filter, update）会将调用请求并行地分发给所有或部分 AgentGroup Actor，然后收集结果。例如：
+```python
+# 并行调用所有 AgentGroup 的 gather 方法
+gather_tasks = []
+for group in self._groups.values():
+    gather_tasks.append(
+        group.gather.remote(content, target_agent_ids)
+    )
+results = await asyncio.gather(*gather_tasks)
+```
+
+- b AgentGroup
+最重要的 Actor，管理一组智能体的生命周期和行为。状态和内存。
+执行智能体的 step（决策）和 react（反应）逻辑。
+接收来自 AgentSociety 的指令，如信息收集 (gather)、状态更新 (update) 等。
+通过持有的 PgWriter Actor 句柄，将数据异步写入数据库。
+
+- c PgWriter
+@ray.remote
+class PgWriter  把agent的LLM运算和数据库读写进行分离  不阻塞
+
+- d 可选的消息过滤
+@ray.remote
+class MessageInterceptor
+
+--------
+
+RAY的部署
+
+linux单机部署运算效率最高 但是docker部署更隔离和模块化
+
+个人在远程linux服务器上通过docker部署
+
+一、先在阿里云控制台获取【专属镜像加速地址】 
+在/etc/docker/daemon.json配置好国内源
+```
+{
+  "registry-mirrors": ["https://0sdhrnpx.mirror.aliyuncs.com"]
+}
+```
+
+二、在工作目录拉取python基础镜
+```bash
+docker pull python:3.10-slim
+```
+得到一堆Pull complete 
+然后编辑dockerfile
+```
+FROM python:3.10-slim
+RUN pip install ray[default] -i https://pypi.tuna.tsinghua.edu.cn/simple
+WORKDIR /app
+EXPOSE 6379 8265 10001
+CMD ["ray", "start", "--head", "--block"]
+```
+
+三、构建ray镜像
+```
+docker build -t local-ray:latest .
+```
+会通过pip装
+Step 1/5 : FROM python:3.10-slim
+ ---> xxx  直到结束
+
+四、验证本地镜像
+```
+docker images | grep local-ray
+```
+
+五、更新 docker-compose 使用本地镜像
+cat > docker-compose.yml << 'EOF'
+services:
+  ray-head:
+    image: local-ray:latest
+    container_name: ray-head
+    ports:
+      - "8265:8265"
+      - "10001:10001"
+      - "6379:6379"
+    shm_size: '1g'
+    command: ray start --head --num-cpus=1 --dashboard-host=0.0.0.0 --block
+
+  ray-worker:
+    image: local-ray:latest
+    container_name: ray-worker-1
+    depends_on:
+      - ray-head
+    shm_size: '1g'
+    command: ray start --address='ray-head:6379' --num-cpus=1 --block
+EOF
+
+【注意 如果内存占用过高 使用轻量启动】
+cat > docker-compose.yml << 'EOF'
+services:
+  ray-head:
+    image: local-ray:latest
+    container_name: ray-head
+    ports:
+      - "8265:8265"
+      - "10001:10001"
+      - "6379:6379"
+    shm_size: '256m'  # 减少共享内存
+    command: ray start --head --num-cpus=1 --memory=1000000000 --dashboard-host=0.0.0.0 --block
+EOF
+
+六、启动ray集群
+docker-compose up -d
+检查状态
+docker-compose ps
+停止ray集群
+docker-compose down
+
+七、之后 查看启动控制台打印
+docker-compose logs ray-head
+```
+ray-head  | 2025-08-31 17:01:17,380     INFO usage_lib.py:473 -- Usage stats collection is enabled by default without user confirmation because this terminal is detected to be non-interactive. To disable this, add `--disable-usage-stats` to the command that starts the cluster, or run the following command: `ray disable-usage-stats` before starting the cluster. See https://docs.ray.io/en/master/cluster/usage-stats.html for more details.
+ray-head  | 2025-08-31 17:01:17,380     INFO scripts.py:913 -- Local node IP: 172.21.0.2
+ray-head  | 2025-08-31 17:01:26,175     SUCC scripts.py:949 -- --------------------
+ray-head  | 2025-08-31 17:01:26,175     SUCC scripts.py:950 -- Ray runtime started.
+ray-head  | 2025-08-31 17:01:26,175     SUCC scripts.py:951 -- --------------------
+ray-head  | 2025-08-31 17:01:26,175     INFO scripts.py:953 -- Next steps
+ray-head  | 2025-08-31 17:01:26,175     INFO scripts.py:956 -- To add another node to this Ray cluster, run
+ray-head  | 2025-08-31 17:01:26,175     INFO scripts.py:959 --   ray start --address='172.21.0.2:6379'
+ray-head  | 2025-08-31 17:01:26,175     INFO scripts.py:968 -- To connect to this Ray cluster:
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:970 -- import ray
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:971 -- ray.init()
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:983 -- To submit a Ray job using the Ray Jobs CLI:
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:984 --   RAY_API_SERVER_ADDRESS='http://172.21.0.2:8265' ray job submit --working-dir . -- python my_script.py
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:993 -- See https://docs.ray.io/en/latest/cluster/running-applications/job-submission/index.html 
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:997 -- for more information on submitting Ray jobs to the Ray cluster.
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1002 -- To terminate the Ray runtime, run
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1003 --   ray stop
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1006 -- To view the status of the cluster, use
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1007 --   ray status
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1011 -- To monitor and debug Ray, view the dashboard at 
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1012 --   172.21.0.2:8265
+ray-head  | 2025-08-31 17:01:26,176     INFO scripts.py:1019 -- If connection to the dashboard fails, check your firewall settings and network configuration.
+ray-head  | 2025-08-31 17:01:26,179     INFO scripts.py:1123 -- --block
+ray-head  | 2025-08-31 17:01:26,179     INFO scripts.py:1124 -- This command will now block forever until terminated by a signal.
+ray-head  | 2025-08-31 17:01:26,179     INFO scripts.py:1127 -- Running subprocesses are monitored and a message will be printed if any of them terminate unexpectedly. Subprocesses exit with SIGTERM will be treated as graceful, thus NOT reported.
+```
+上述说明已经启动
+
+八、Dashboard 可视化控制台地址：IP::8265  可以在浏览器看到蓝色的控制台即可
+
+九、【在容器应用内】创建脚本用于计算
+docker exec -it ray-head bash
+
+在容器内创建测试脚本
+```
+cat > /app/test_ray.py << 'EOF'
+import ray
+import time
+
+@ray.remote
+def calculate_square(x):
+    return x * x
+
+if __name__ == "__main__":
+    print("正在连接到本地 Ray 集群...")
+    
+    # 在容器内部，直接连接本地 Ray
+    ray.init(address="auto")
+    
+    print(f"连接成功！集群资源: {ray.cluster_resources()}")
+    
+    # 测试计算
+    start_time = time.time()
+    number_range = range(1, 1001)
+    
+    print(f"正在分发 {len(number_range)} 个计算任务...")
+    results_refs = [calculate_square.remote(i) for i in number_range]
+    
+    print("正在等待任务完成...")
+    results = ray.get(results_refs)
+    total_sum = sum(results)
+    
+    end_time = time.time()
+    
+    print("\n--- 计算完成 ---")
+    print(f"1 到 1000 的平方和为: {total_sum}")
+    print(f"计算耗时: {end_time - start_time:.4f} 秒")
+    
+    ray.shutdown()
+    print("测试完成！")
+EOF
+```
+
+运行测试
+python /app/test_ray.py
+得到输出和dashboard的记录
+```
+正在连接到本地 Ray 集群...
+2025-08-31 17:15:11,255 INFO worker.py:1771 -- Connecting to existing Ray cluster at address: 172.21.0.2:6379...
+2025-08-31 17:15:11,328 INFO worker.py:1942 -- Connected to Ray cluster. View the dashboard at 172.21.0.2:8265 
+连接成功！集群资源: {'node:__internal_head__': 1.0, 'node:172.21.0.2': 1.0, 'CPU': 1.0, 'memory': 1000000000.0, 'object_store_memory': 120693964.0}
+正在分发 1000 个计算任务...
+正在等待任务完成...
+--- 计算完成 ---
+1 到 1000 的平方和为: 333833500
+计算耗时: 2.0337 秒
+测试完成！
+```
+测试完成后退出容器
+exit
+
+--------
+
+总结agent society的ray架构
+```mermaid
+graph TD
+    subgraph User/Client
+        A[AgentSociety]
+    end
+
+    subgraph Ray Cluster
+        subgraph AgentGroup Actors
+            G1[AgentGroup 1]
+            G2[AgentGroup 2]
+            GN[...]
+        end
+
+        subgraph PgWriter Actor Pool
+            P1[PgWriter 1]
+            PN[...]
+        end
+
+        subgraph Optional Actors
+            MI(MessageInterceptor)
+        end
+    end
+
+    subgraph External Services
+        DB[(PostgreSQL DB)]
+        Q((Ray Queue))
+    end
+
+    A -- 1. Create/Manage --> G1
+    A -- 1. Create/Manage --> G2
+    A -- 1. Create/Manage --> GN
+    A -- 1. Create/Manage --> P1
+    A -- 1. Create/Manage --> PN
+    A -- 1. Create/Manage --> MI
+
+    A -- 2. Dispatch Tasks (e.g., gather, update) --> G1
+    A -- 2. Dispatch Tasks --> G2
+    A -- 2. Dispatch Tasks --> GN
+
+    G1 -- 3. Write Data --> P1
+    G2 -- 3. Write Data --> P1
+    GN -- 3. Write Data --> PN
+
+    P1 -- 4. Execute Write --> DB
+    PN -- 4. Execute Write --> DB
+
+    A -- 5. Create & Pass Queue --> MI
+    MI -- 6. Put Message --> Q
+    A -- 7. Get Message --> Q
+
+    style A fill:#cde4ff,stroke:#333,stroke-width:2px
+    style G1 fill:#ccffdd,stroke:#333,stroke-width:1px
+    style G2 fill:#ccffdd,stroke:#333,stroke-width:1px
+    style GN fill:#ccffdd,stroke:#333,stroke-width:1px
+    style P1 fill:#fff0c1,stroke:#333,stroke-width:1px
+    style PN fill:#fff0c1,stroke:#333,stroke-width:1px
+    style MI fill:#ffcccc,stroke:#333,stroke-width:1px
+```
+
+--------
+
+
+MAS 项目 Ray 框架迭代方案【gemini】
+系统将重构为以 Ray Actor 为核心的分布式架构。
+
+**核心组件：**
+
+1.  **Simulation Controller (原 `simulation.py`)**: 作为系统入口和总控制器，不再直接执行循环，而是负责：
+    *   初始化 Ray 环境。
+    *   根据配置创建并管理其他核心 Actor（`AgentGroup` 池, `DatabaseWriter` 池, `MessageDispatch` Actor）。
+    *   驱动整个模拟流程，通过远程调用向 `AgentGroup` Actor 分发任务（如 `step`, `react`）。
+    *   使用 `asyncio.gather` 或 `ray.get` 并行等待和收集任务结果。
+
+2.  **AgentGroup Actor (新概念)**:
+    *   最重要的计算单元，每个 Actor 管理一组（例如 100 个）`Agent` 实例。
+    *   负责执行其管理的 `Agent` 的内部逻辑（`step`, `react`）。
+    *   持有 `DatabaseWriter` 和 `MessageDispatch` Actor 的句柄，用于异步 I/O 和消息通信。
+    *   将大量 `Agent` 封装在少量 `Actor` 中，避免了为每个 `Agent` 创建一个 `Actor` 的巨大开销。
+
+3.  **DatabaseWriter Actor (改造 `toolkit/database/` 下的 Adapters)**:
+    *   将现有的数据库适配器（如 `redis_graph_adapter`, `sql_adapter`）逻辑封装在一个或多个 Ray Actor 中。
+    *   通常会创建一个 Actor 池（`ray.util.ActorPool`），`AgentGroup` Actor 可以从中获取一个 `DatabaseWriter` 来执行非阻塞的数据库写入操作。
+
+4.  **MessageDispatch Actor (改造 `system/message_dispatch.py`)**:
+    *   将现有的 `MessageDispatch` 类转化为一个独立的、全局单例的 Ray Actor。
+    *   负责接收来自所有 `AgentGroup` 的消息，并根据规则进行路由和分发。
+    *   通过 Ray 的分布式队列 (`ray.util.queue.Queue`) 或直接的 Actor 调用与 `SimulationController` 或其他 Actor 通信。
+
+**架构图 (Mermaid):**
+
+```mermaid
+graph TD
+    %% 样式定义：黑底、白字、白边框
+    classDef blackNode fill:#000,color:#fff,stroke:#fff,stroke-width:1px;
+
+    subgraph "MAS on Ray - 纵向分层架构"
+        
+        %% 层 1: 主控制进程
+        subgraph "层1:主控进程(Controller)"
+            A[Simulation Controller]
+        end
+
+        %% 层 2: 分布式服务
+        subgraph "层2:分布式服务(Actor Services)"
+            direction LR
+            
+            subgraph "智能体(AgentGroup Pool)"
+                B_group["AgentGroup Actor [1...N](每个Group若干 Agent 实例)"]
+            end
+
+            subgraph "数据持久化(adapter)"
+                C_Pool(Database Writer Pool)
+            end
+
+            subgraph "全局消息(dispatch)"
+                D[MessageDispatch Actor]
+            end
+        end
+    end
+
+    %% 交互流程
+    A -- "创建 Actors & Pools" --> B_group & C_Pool & D
+    A -- "并行调用 group.step()" --> B_group
+
+    B_group -- "从池中获取 Writer" --> C_Pool
+    C_Pool -- "返回 Writer 句柄" --> B_group
+    B_group -- "异步写入数据" --> C_Pool
+
+    B_group -- "发送消息" --> D
+    D -- "路由消息至目标 Group" --> B_group
+
+    %% 应用样式到所有节点
+    class A,B_group,C_Pool,D blackNode;
+```
+
+
+将 MAS 项目迁移到 Ray 框架，需要完成以下核心任务（按建议顺序）：
+
+1.  **环境配置**:
+    *   在 `pyproject.toml` 中添加 `ray[serve]` 或 `ray[default]` 依赖。
+
+2.  **创建 `DatabaseWriter` Actor**:
+    *   定义一个新的 `DatabaseWriter` 类，标记为 `@ray.remote`。
+    *   将现有数据库适配器的实例化和方法调用逻辑移入该类。
+
+3.  **改造 `MessageDispatch` 为 Actor**:
+    *   为 `MessageDispatch` 类添加 `@ray.remote` 装饰器。
+
+4.  **创建 `AgentGroup` Actor**:
+    *   定义新的 `AgentGroup` 类，标记为 `@ray.remote`。
+    *   实现 `__init__` 以接收 `Agent` 列表和 `DB`、`Message` Actor 的句柄。
+    *   实现 `step` 等核心方法，循环调用其管理的 `Agent` 实例的方法。
+
+5.  **改造 `Agent` 核心逻辑**:
+    *   修改 `Agent` 的 `step` 或 `react` 方法，使其不再直接实例化 `Adapter` 或 `Dispatcher`，而是接收 `DatabaseWriter` 和 `MessageDispatch` 的 Actor 句柄作为参数，并使用 `handle.method.remote()` 进行调用。
+
+6.  **重构 `SimulationController`**:
+    *   在程序入口初始化 Ray。
+    *   创建并管理所有 Actor 和 Actor 池。
+    *   将主循环从串行执行改为并行的远程任务分发 (`ray.get([group.step.remote() for group in ...])`)。
+
+7.  **更新配置文件**:
+    *   在 `simulation_config.yaml` 或类似文件中添加 Ray 相关的配置，如 `num_agent_groups`, `db_writer_pool_size` 等，以便 `SimulationController` 动态创建 Actor。
+
+
+
+
+
+---------
+
+0901会议内容
+
+
+
+---------
+
+预计9.1开始开发应用
+
+9.1之后：
+对于框架本身来说需要开始开发分布式
+时空和可视化部分 框架本身只定义最原始可用的时空数据结构  其它adapter都交给应用写
+未来还有回滚的部分
+【类比agent society的两级plan制作：第一次只能在需求金字塔选一个行为（所有有限的行为都写死） 第二次对具体的行为进行细化  但是这个比较细化业务 不是很抽象的框架
+借鉴后：明确 plan整体思想：可以先生成一天大纲【细化程度？】
+然后执行过程中会有记录当前步  然后中途应对突发事件可以【传入一开始到当前步的原始大纲】【或传递原始大纲并标记已经做到哪了】【这个思考是LLM生成效果的考虑】然后从当前步开始生成新大纲】
+
+老师DDL:9月底 发布分布式版本 同时其他人开发应用 并开始写论文
+十月还要迭代一版框架 【作为实验室遗产 供大家写论文用】
+
+
+
+
+
 
 
 

@@ -1079,10 +1079,13 @@ graph TB
 
 
 首先参考agent society论文源码中RAY的写法：
+
 一、任务并行化。 AgentSociety 作为总控制器，将任务（如智能体行为更新、信息收集）分发给各个 AgentGroup Actor，并使用 asyncio.gather 等待所有任务并行完成
+
 二、资源解耦。
 数据库写入: 创建了一个 PgWriter Actor 池，多个 AgentGroup Actor 可以共享这些 Writer，避免了数据库连接的瓶颈，并实现了异步写入。【类似adapter】
 消息处理: MessageInterceptor 作为一个独立的 Actor 运行，专门负责拦截和处理智能体间的消息，与智能体自身的逻辑解耦。【类似dispatch】
+
 三、通信。
 Actor 句柄 (ObjectRef): 组件之间不直接持有对象实例，而是通过 Ray 的 ObjectRef（Actor 句柄）进行远程方法调用。
 分布式队列 (ray.util.queue.Queue): 用于在 AgentSociety 主进程和 MessageInterceptor Actor 之间传递消息，实现了解耦的异步通信。
@@ -1471,10 +1474,323 @@ graph TD
 ---------
 
 0901会议内容
+优化点：
+1 可能可以在未来的某个tick才去检查是否run结束 不用等run结束再下一个tick
 
+2 要求先做异步  即redis LLM env action  agent  sys的主函数异步即可   再做ray 
+异步版本才用来作为开发的基础  目前考虑异步和ray分开做  异步依然单机
 
+3 现在类比agent society  agent group做成ray的actor  那么action和environment这种全局只需要一个实例 但是这两个类内很多方法是独立的  那是否要分别变成actor还是拆开 模块内变成多个ray的function（task）供agent共享调用?
+sys只需要把dispatch变成actor即可
+
+4 单机和分布式 作多个仓库
+
+个人TODO 等本仓库异步写法成立后 研究分布式RAY的设计和写法 最好是本周写写
 
 ---------
+
+0903开发内容
+拉取师兄分支 分析是否可以异步
+
+【debug 恢复conversation记录】
+凌晨运行后 DB中缺失conversation和reply
+DEBUG:AttributeError: 'NoneType' object has no attribute 'get_relation'
+修复_reply_message下的receiver_info = agent.get_component("percept").get_relation(to_id)
+组件名称变更后应全局检查  可能直接字符串指定不容易发现问题
+修复message_dispatch.py下  "perception" 更名为 "percept"
+
+现在有两个分离的数据存储系统：
+MessageDispatcher 将消息保存到 MessageHub 组件（通过 MsgBasicOpsPlugin）
+BasicPerceptionPlugin 从 自己的 adapter 读取聊天历史
+这两个系统没有连接
+更改perception插件的get_chat_history 从MessageHub直接去读
+
+replan相关问题  修改后 
+
+
+
+
+
+
+然后考虑设计和编写ray结构：
+让claude设计重构  将action env拆解为多个func.remote 而非完整actor
+其它按照原设计 新建agent group 与dispatch adapter均作为actor
+
+魔改：
+【序列化是大问题 最好放到actor的共享区域中 不要在类初始化时传入依赖 通过id获取全局引用 ray的方式】
+Agent创建时也不能传递Environment对象。我需要修改Agent，让它也不接收Environment和Action对象：
+LLMRouter对象包含了不可序列化的锁对象，无法通过Ray传递。我需要修改架构，让Action/Agent在初始化时创建自己的LLMRouter，而不是传递现有的。
+Environment对象也不能序列化。需要修改MessageDispatcher，让它不接收Environment对象，而是在需要时通过其他方式访问
+现在问题是组件对象也不能序列化。需要修改Environment的组件初始化方式，在Environment内部创建组件
+
+[更核心的问题 在于无法自底向上直接传递id构成actor  会有翻转的引用 如component和plugin]
+
+```
+TypeError: Could not serialize the argument <src.mas.environment.environment.Environment object at 
+0x0000018745C0CD50> for a task or actor src.mas.agent.agent.Agent.set_environment_and_action_refs: 
+================================================================================
+Checking Serializability of <src.mas.environment.environment.Environment object at 0x0000018745C0CD50>
+================================================================================
+!!! FAIL serialization: cannot pickle '_thread.RLock' object
+    Serializing '_get_environment_state' <bound method Environment._get_environment_state of <src.mas.environment.environment.Environment object at 0x0000018745C0CD50>>...
+    !!! FAIL serialization: cannot pickle '_thread.RLock' object
+        Serializing '__func__' <function Environment._get_environment_state at 0x00000187435985E0>...
+    WARNING: Did not find non-serializable object in <bound method Environment._get_environment_state of <src.mas.environment.environment.Environment object at 0x0000018745C0CD50>>. This may be an oversight.
+================================================================================
+Variable:
+        FailTuple(_get_environment_state [obj=<bound method Environment._get_environment_state of <src.mas.environment.environment.Environment object at 0x0000018745C0CD50>>, parent=<src.mas.environment.environment.Environment object at 0x0000018745C0CD50>])
+was found to be non-serializable. There may be multiple other undetected variables that were non-serializable.
+Consider either removing the instantiation/imports of these variables or moving the instantiation into the scope of the function/class.
+================================================================================
+Check https://docs.ray.io/en/master/ray-core/objects/serialization.html#troubleshooting for more information.
+If you have any suggestions on how to improve this error message, please reach out to the Ray developers on github.com/ray-project/ray/issues/
+================================================================================
+```
+
+
+0903学生会议
+老师认为需要敏捷开发用于体现框架开发便捷性【首先框架需要模板 以支持模型填充生成  并制定插件规范让模型能写】
+首先开发分布式框架
+然后思考论文的写法 重点是与其它框架相比的优势和思考
+后面再针对框架做改进
+
+
+
+
+异步版debug：
+【1】OKK  全局print改log  toolkit加log    llm API最后一个去掉 
+【2】OKK  message/dispatch先加一个conversation id字段
+【3】  【TODO 根据上述修改】conversation要出现在DB  <- perception的err：chat_history 
+    插件中直接通过conversation id去env查记录
+【4】
+prompt修改：
+  - 对话toID在action中进行解释  避免变成身份或名字 
+  - plan中要求对话提前一点出现
+偶现：act会失败  
+
+
+
+
+
+
+0904开发内容
+
+一。OKK
+ 'PerceptComponent' object has no attribute 'message_dispatcher'
+DEBUG：
+现在get_chat_history的写法中 从环境hub的MsgBasicOpsPlugin获取消息
+
+根本问题：ID不匹配
+由于同一组agent也有多天的多个对话记录 因此需要UUID作为对话id
+存储时的key: conversation:uuid-xxx（随机UUID） 
+查询方案: 感知插件get_chat_history要求去env的message hub中拿历史消息
+但是message hub只有一些adapter方法【并没有sys的dispacher引用】 无法得到系统的Dispacher类的UUID的map？？
+TODO 
+如果要env得到系统的dispacher的map  
+需要设计权限 或更改初始化 传入sys的dispach的引用 才能用UUID的map精确查找对话记录
+临时解决：hub查询时遍历得到。
+
+二。OKK
+OKK 更改了plan的prompt 更积极地回复 OKK
+
+
+三、OKK对话记录的agent_id依然会变成名字或身份
+对话toID的问题 conversation要求均为id字段 不得出现姓名或身份
+解决：目前单纯在agent的act中进行读取config并转换【要求ID均为agent_*格式】
+
+四、
+【偶现问题】LLMRouter providers=7 请求失败
+
+--------
+
+
+0905凌晨思考设计
+ray计划：
+修改规模预估
+group、act和env的组件、dispatch = actor
+至于adapter和llm等 
+调研/参考  领域知识    明确什么模块用actor/task模型
+
+
+--------
+
+```claude
+claude：
+
+Actor
+- 可以在内部使用@ray.method（或async/await模式）启动不阻塞的Task
+- 也可以调用外部的task
+- 甚至可以在actor内建立新的类实现内外混合task的复杂流程
+类内task:
+状态访问: 可以直接访问Actor的内部状态
+减少序列化: 不需要传递大量状态数据
+简化设计: 逻辑内聚性更好
+类外task:
+无限并行: 可以在整个集群上并行执行
+无状态纯净: 更容易测试和调试
+资源共享: 可以被多个Actor共享
+```
+
+```gemini
+喂了MAS和agent society两大项目和讨论思考后：
+gemini：
+核心设计哲学
+在 Ray 中，最佳实践是将架构决策建立在一个核心原则之上：
+
+有状态的服务 (Stateful Services) -> Ray Actor: 如果一个模块需要维护一个跨多次调用的、被多个其他模块共享的状态，或者需要封装一个持久化资源（如连接池），那么它就是 Actor 的完美候选者。Actor 就像一个微服务，提供对其内部状态的安全、并发访问。
+
+无状态的操作 (Stateless Operations) -> Ray Task: 如果一个操作是一次性的计算或 I/O 密集型任务，它接收输入、执行逻辑、返回输出，并且不依赖于上次调用的内部状态，那么它就应该被实现为 Ray Task。
+
+【主进程：RUN Simulation】（非Ray）
+│
+├──→ 【Ray Cluster】
+│    │
+│    ├──→ 【Actor Pool: AgentGroup Actors】
+│    │    ├── AgentGroup_1 (管理 Agent 1~N)
+│    │    ├── AgentGroup_2 (管理 Agent M~K)
+│    │    └── AgentGroup_X (管理 Agent ...)
+│    │    │
+│    │    └── 每个Agent执行时：【个人考虑 同agent下的task过程要串行】
+│    │         ├── 【Ray Actor: LLM provider Actor 】 与provider actor交互
+│    │         ├── 【Ray Task: Action_Execute_Task】(Message_Send_Task) 与ACT actor交互
+│    │         ├── 【Ray Task: Perception_Task】 与ENV actor交互
+│    │         └── 【Ray Task: Plan_Task】...等等
+│    │
+│    ├──→ 【Actor: MessageDispatcher】（路由逻辑（有状态））
+│    │
+│    ├──→ 【Environment下每个Comp都是独立Actor职责分离，避免单点瓶颈，提高并行度。】
+│    │    ├── 【Component Actor: RelationshipManager】
+│    │    ├── 【Component Actor: SpaceTimeManager】
+│    │    └── 【Component Actor: MessageHub】
+│    │
+│    ├──→ 【Actor Pool: Database Adapter Actors】(每类DB一个actor？)
+│    │    └── 每个Adapter原子化的Task：
+│    │         ├── 【Ray Task: DB_Read_Task】
+│    │         ├── 【Ray Task: DB_Write_Task】
+│    │         ├── 【Ray Task: DB_Query_Task】
+│    │         └── 【Ray Task: DB_Batch_Task】
+│    │
+│    └──→ 【Actor Pool: LLM Provider Actors】
+│         ├── 【Actor: OpenAI_Provider】
+│         ├── 【Actor: Claude_Provider】
+│         ├── 【Actor: Gemini_Provider】
+│         └── 【Actor: Local_LLM_Provider】
+│         │
+│         └── 每个LLM Provider原子化Task：
+│              ├── 【Ray Task: Response_Task】
+│              ├── 【Ray Task: Health_Check】
+│              ├── 【Ray Task: Token_Count_Task】...等等
+│
+├──→ 【外部服务】（非Ray框架）
+│    ├── 【各种DB配置】
+│    │    ├── PostgreSQL
+│    │    ├── MongoDB
+│    │    ├── Neo4j (图)
+│    │    └── Redis
+│    │
+│    ├── 【LLM API配置】
+│    │
+│    └── 【Monitor & Log】
+│
+└──→ 【其它配置与启动】（非Ray框架）
+
+ray task ──→ Action下的每个【component甚至具体方法】作为 Ray Task	  【TODO】
+
+
+【以下为讨论点】
+一、adapter是否无需成为 Actor	
+本质上还是无状态的一些CRUD方法而已 且底层数据库驱动的连接池pool天然已经具备并发处理。
+GEMINI:若Adapter仅为无状态CRUD，且底层驱动已具备连接池/并发，建议直接用Ray Task调用，无需Actor。若Adapter需缓存、连接复用、状态管理（如分布式缓存、批量写入、事务等），可升级为Actor
+
+二、Action	是否要像env一样 用组件作为actor 包裹其下的具体方法task，还是直接将细粒度的【component甚至具体方法】作为 Ray Task，没有actor包裹？
+GEMINI:
+如果 Action component 未来可能需要状态（如限流、统计、缓存、异步队列等），建议先做成 Actor，内部再异步启动 Task 完成具体动作。
+如果 Action 仅为无状态方法，直接纯Task化每个方法，减少 Actor 层级。
+可以混合：核心有状态的 component 用 Actor，具体动作用 Task。甚至做成复杂的task链
+
+三、LLM Router	单独的 Actor (或 Actor Pool)	作为一个有状态的共享服务，集中管理资源（连接、API Key），并实现负载均衡和控制。
+【
+个人思考：
+要么每个provider拥有的（一组）API完全不同 那么可以多个provider  每个provider一个actor 对外共享API可用状态等
+如果全局一个provider 那么并发效率由【API数量和分配策略】决定，此时不由provider数量决定 则不需要actor？
+】
+GEMINI:推荐单独Actor或Actor Pool，集中管理API Key、速率、负载均衡、故障切换。
+
+```
+
+
+```deepseek
+deepseek：
+1. Environment模块
+当前状态：Environment是全局唯一实例，包含多个组件（RelationshipComponent、MessageHubComponent、SpaceTimeComponent），这些组件通过插件模式实现。
+
+分布式设计建议：
+将整个Environment作为一个Ray actor。原因：
+Environment组件（如关系、消息中心、时空）共享状态或需要全局一致性。例如，关系图需要跨agent保持同步，消息中心需要集中处理消息路由。
+作为一个actor，所有对Environment的访问将通过远程调用序列化，保证状态一致性，简化并发控制。
+如果将每个component作为单独actor，会增加协调复杂度，且可能引入分布式事务问题，不利于性能。
+实现方式：
+创建一个Ray actor类（如EnvironmentActor），它包装现有的Environment实例。
+将Environment的方法（如get_component、add_component）暴露为remote方法。
+agent group actor通过引用这个Environment actor来访问环境数据。
+
+2. Action模块
+当前状态：Action是全局唯一实例，包含多个组件（CommunicateComponent、ToolsComponent、OtherComponent），这些组件通过插件实现具体动作。
+
+分布式设计建议：
+不将Action作为一个整体actor，而是将每个动作方法封装为Ray task。原因：
+动作方法通常是无状态的或状态无关（如发送消息、调用工具），适合并行执行。
+将每个方法作为task可以提高并发性，避免actor成为瓶颈。
+如果动作组件有状态（如工具插件维护内部状态），则需要将状态组件作为actor，但根据您的代码，动作组件似乎主要是无状态的。
+
+实现方式：
+将Action组件中的每个方法（如_send_message、_eat）定义为独立的Ray remote函数。
+agent group actor在需要执行动作时，调用这些remote task。
+注意：如果动作方法需要访问共享资源（如数据库），需要通过其他actor（如数据库adapter actor）来访问。
+
+3. Database Adapters模块
+当前状态：数据库适配器（如RedisKVAdapter、RedisGraphDBAdapter）用于键值存储和图数据库操作，被agent和环境使用。
+分布式设计建议：
+将每个数据库适配器类型作为一个Ray actor。原因：
+数据库连接不是线程安全的，通过actor序列化所有数据库操作可以保证连接安全。
+适配器actor可以管理连接池，提高效率。
+多个agent group共享同一个数据库时，通过actor可以集中控制访问。
+实现方式：
+为每个适配器类（如RedisKVAdapter、RedisGraphDBAdapter）创建一个Ray actor类（如RedisKVActor）。
+在actor中初始化适配器实例，并将方法（如get、set）暴露为remote方法。
+agent group actor和Environment actor通过引用这些adapter actor来执行数据库操作。
+
+4. LLM API模块
+当前状态：LLMRouter管理多个LLM提供商（如QwenProvider），用于生成文本响应。
+
+分布式设计建议：
+将LLM调用封装为Ray task，而不是actor。原因：
+LLM调用是无状态的I/O操作，适合作为task并行执行。
+高并发LLM请求可以通过Ray的动态调度分配到多个worker上，提高吞吐量。
+LLMRouter本身可以作为主进程的一部分，用于配置管理，但调用本身是task。
+实现方式：
+将LLMRouter.chat方法包装为一个Ray remote函数。
+agent group actor在需要LLM调用时，提交这个remote task。
+
+如果需要限制并发LLM调用数量，可以使用Ray的资源管理或设置最大并发task数。
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 预计9.1开始开发应用
 
@@ -1488,21 +1804,6 @@ graph TD
 
 老师DDL:9月底 发布分布式版本 同时其他人开发应用 并开始写论文
 十月还要迭代一版框架 【作为实验室遗产 供大家写论文用】
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 目前已有的架构类图 在下述网站打开图即可

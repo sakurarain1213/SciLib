@@ -1802,8 +1802,75 @@ agent group actor在需要LLM调用时，提交这个remote task。
 借鉴后：明确 plan整体思想：可以先生成一天大纲【细化程度？】
 然后执行过程中会有记录当前步  然后中途应对突发事件可以【传入一开始到当前步的原始大纲】【或传递原始大纲并标记已经做到哪了】【这个思考是LLM生成效果的考虑】然后从当前步开始生成新大纲】
 
+
+
+0908 ray框架会议
+
+目前定义 
+action（每组件） 
+env（每组件） 
+ AgentGroup三个actor  
+ 最多一百多个实例 那么adapter就不用actor
+LLM router作为actor
+
+【目前env或act的add component可以支持handle句柄或者组件】
+【
+ID to agent 现在要变成ID to group 并且检索两遍 
+考虑到进程切换开销 还是写死好了
+现在确定 config只定义group数量 然后均匀填入n个任意agent 从配置map检索
+反正agent之间每没交流 放哪都行
+
+然后router这边 确定要全局健康管理 所以要actor
+
+然后adapter不做actor
+
+】
+
+开发方面：
+adapter目前不懂 env可以和adapter一起测了
+agent sys调用action和env的方式要改 全部通过run接口
+
+改aciton  目前simulation有late init
+在里面很多组件
+
+TODO 本周个人放假  ray框架看看即可
+
+
+
+0911项目小会
+目前分成两个子项目 两两配对  例如distribute一个分类
+toolkit共用
+还有一些debug
+本win连接远程redis时候需要修改的文件：
+examples\distributed_test\configs\adapters_config.yaml
+src\toolkit\database\redis\redis_graph_adapter.py
+src\toolkit\database\redis\redis_kv_adapter.py
+
+
+DR debug simulation的redis_pool 目前是硬编码的 要修改 OKK
+DR debug log修改 分进程的log
+WXJ debug group的问题 需要group的run()中单独执行每个agent的run（agent的run再判断是否繁忙）
+【或考虑在group级增加】  sys每tick都run每个group
+LPG debug action中（message的生成要移动到agent的act）不能用LLM
+LPG **debug** message_hub现在不作为类 只做DB 交给action的一批方法来CRUD
+
+TODO 大规模测试agent 需要多物理机
+TODO 功能项目移植到ray项目 并行做框架和业务 目前只基于ray
+
+TODO 打断和回滚
+TODO 组件级记忆的RAG 分级存储等
+
+
+
+0915实验室
+目录结构更改 src下+总项目+原src下面的文件夹
+避免循环依赖 将数据结构提取到src下的types
+
+
+
 老师DDL:9月底 发布分布式版本 同时其他人开发应用 并开始写论文
 十月还要迭代一版框架 【作为实验室遗产 供大家写论文用】
+
 
 
 目前已有的架构类图 在下述网站打开图即可

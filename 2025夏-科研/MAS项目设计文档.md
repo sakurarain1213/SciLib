@@ -1804,7 +1804,10 @@ agent group actor在需要LLM调用时，提交这个remote task。
 
 
 
-0908 ray框架会议
+
+--------
+
+## 0908 ray框架会议
 
 目前定义 
 action（每组件） 
@@ -1833,11 +1836,13 @@ agent sys调用action和env的方式要改 全部通过run接口
 改aciton  目前simulation有late init
 在里面很多组件
 
-TODO 本周个人放假  ray框架看看即可
+TODO  ray框架看看即可
 
 
+--------
 
-0911项目小会
+## 0911 项目小会
+
 目前分成两个子项目 两两配对  例如distribute一个分类
 toolkit共用
 还有一些debug
@@ -1847,31 +1852,425 @@ src\toolkit\database\redis\redis_graph_adapter.py
 src\toolkit\database\redis\redis_kv_adapter.py
 
 
-DR debug simulation的redis_pool 目前是硬编码的 要修改 OKK
-DR debug log修改 分进程的log
-WXJ debug group的问题 需要group的run()中单独执行每个agent的run（agent的run再判断是否繁忙）
-【或考虑在group级增加】  sys每tick都run每个group
-LPG debug action中（message的生成要移动到agent的act）不能用LLM
-LPG **debug** message_hub现在不作为类 只做DB 交给action的一批方法来CRUD
-
 TODO 大规模测试agent 需要多物理机
 TODO 功能项目移植到ray项目 并行做框架和业务 目前只基于ray
-
 TODO 打断和回滚
 TODO 组件级记忆的RAG 分级存储等
 
 
 
 0915实验室
+
 目录结构更改 src下+总项目+原src下面的文件夹
 避免循环依赖 将数据结构提取到src下的types
 
+老师排期问题 要求打断功能
+组内考察支持M级agent的cpu和io密集的server。预算10w
 
+
+
+DR debug log修改 分进程的log
+
+**WXJ** debug group的问题 需要group的run()中单独执行每个agent的run(agent的run再判断是否繁忙)【或考虑在group级增加】sys每tick都run每个group
+【个人更改计划 在agent.run内判断，其实要判一大批组件状态。
+更好的方法是通过sys接受到的agent的tick返回值，直接在agent繁忙时不去调run即可。只修改agent group。
+然后在自己分支测试 再合并到ray分支
+debug：需要修改上层调度逻辑，移除Group级别的繁忙管理，让AgentGroup内部的Agent级别调度发挥作用！！！
+DistributedSimulationRunner也改
+】
+
+
+ZH action 加入adapter，移除llm，可以实现对消息的存取(消息记录等)LPG 环境中的message_hub移除 写入system中，system插件化
+QMJ 增加一个types文件夹，config定义成类的形式，参考agent society，把message移入types中LWX 项目结构调整，包一层agentlego
+MJ agent percept需要修改，取消messagehub相关功能，聊天记录通过action获取MJ环境部分的space time需要完善，percept中加入对可及范围地点的获取act 中加入生成消息的函数，修改act部分执行
+
+
+
+
+
+
+
+
+0916实验室
+
+改一下 engine system 和run_simulation
+需求是DistributedSimulationRunner的self.sim改成self.sys
+
+老师要求预算值 快速布局【周五之前测 平时观察 相对准一点】
+cpu服务器。带宽。 然后运行tick时间问题
+逐次叠加问题 第一轮1000个 预算是1-2w。通过单机最大测算一下。然后求预算 论证一下是否靠谱
+LLM 的API数量的测算问题 提早申请。通过节点数量测算。如果api太贵 可以部分用小模型
+明天晚上给出预算案。可以多一倍
+
+【预算案分析 profile可以直接copy 
+根据规模分别衡量以下参数。估计1w agent的预算
+1 回复时间 每tick时间
+2 cpu 内存占用 可能的核心数
+3 api和token消耗等  注意区分输入输出token
+按单机最低 预算尽可能高来做
+然后去看阿里云的服务器选择
+
+并进行分析 产出报告
+
+MAS/logs  下存放日志。现在要求运行这个多agent模拟项目多同时，进行检测并写入日志，需要添加一系列代码，最终产出到log中的一个新文件。硬件目前固定为mac CPU=M4  mem =16GB
+1规模值。其中规模数量可以读取/Users/xinjianwang/Desktop/MAS/MAS/examples/distributed_test/configs/agents_config.yaml达到。目前规模：五个agent。
+2 耗时时间 在run simulation主函数或者相关代码中得到。达到60tick即逻辑天的物理时间 则强制终止模拟，需要记录总运行的物理时间，进而得出平均每tick的物理时间。
+3   cpu/内存占用曲线 这两个曲线需要从第1到60个tick全程记录物理硬件的曲线，然后绘制为两张曲线图一同输出到log文件夹下。注意图中需要每5个tick一个横坐标标识
+4 api和token消耗 。这个需要编写代码 在/Users/xinjianwang/Desktop/MAS/MAS/src/toolkit/llm中 所有用到api的地方 都要截取获得token消耗值 ，由于有多个provider要累加， 统计总token消耗和平均每tick的token消耗。
+】
+okk 等待数据。紧急  下午 尽快把数据格式要求发给吕工。近一个月数据。用于训练 
+
+
+
+0917实验室
+等待大规模生成数据再测试预算
+预算案结论。先上100 agent 试试 okk 【采用Wx的profile】
+按照agent society的配置 单机 c7.16x.large  64core 128GB 就可以支持1w agent 
+LLM用8张A800
+
+【okk】修改percept部分，维护一个短期消息记录(涉及到消息记录的更新)，删除感知中的id字段
+  问题：是否持久化“放redis就行  是否存双方：要。  是否一天结束后强制清空 可以按照tick 每到60tick强制清空！
+  步骤 1：修改消息持久化逻辑
+修改 add_message 方法，使其在接收到消息时，除了将消息放入内存优先级队列外，还会立即使用 adapter 将其持久化到 Redis 的短期对话历史中。
+对话记录的键将由双方的 agent_id 排序后生成，确保唯一性。
+步骤 2：新增一个 get_short_term_history 方法，用于查询与特定智能体的对话记录。
+此方法会检查对话记录的最后更新时间（tick），如果超过60个 tick，将自动清除该记录并返回空列表，实现短期记忆的“遗忘”功能。
+步骤 3：修改 execute 方法，从其输出的 perception_data 中移除所有 id 字段，以符合你的要求。
+步骤 4：更新 get_messages 使其在从内存队列中消费消息后，也负责更新 Redis 中的对话记录，确保数据同步。
+
+【okk】sys 中 直接新写一个py 加入一个用户可以自定义的调度模块，来定义一些控制规则，并且提供好一些抽象接口，具体例子可以是name和id的映射，形式不是插件 其他可以再想想
+
+
+0918实验室
+为MAS项目中一个独立于sys的中控模块取名
+这个模块在初始化之后就获取到agent env action sys（sys目前只有timer message log）的handle引用 然后传递给agent action等，此时模块之间交互调用即需要通过这个中控模块 进行规则 权限等等操作才能成功跨模块调用。那么这个模块可以叫什么
+参考：
+Coordinator 协调者
+Orchestrator 编排器
+Mediator 媒介
+Gateway
+Governor (治理器/总督)
+MASCore (MAS核心)
+Nexus (连接点/中枢)
+Conductor (指挥家)
+Fabric (构造/织物)将各个独立组件连接成一个整体的底层基础架构。这个词暗示了模块为所有上层交互提供了基础网络和结构。
+
+Dispatcher (调度器)
+Servic Hub eBus (服务总线)
+controller【暂定】
+
+
+
+今天继续联调 改需求
+【okk】感知的get message需要构建为短期记忆 然后交给reflect每天删除。并支持按照name 转id查询得到   并且构建plan和reflect的时候需要查询短期记忆
+
+
+
+【lora 拿到公司数据微调一版模型 通过实验室集群。再测试】
+
+
+0919实验室
+拿到GPU server 配独立的环境 进行训练
+nvidia-smi   
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.146.02             Driver Version: 535.146.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA GeForce RTX 4090        On  | 00000000:4F:00.0 Off |                  Off |
+| 30%   23C    P8              21W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   1  NVIDIA GeForce RTX 4090        On  | 00000000:52:00.0 Off |                  Off |
+| 30%   25C    P8               8W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   2  NVIDIA GeForce RTX 4090        On  | 00000000:56:00.0 Off |                  Off |
+| 30%   27C    P8              22W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   3  NVIDIA GeForce RTX 4090        On  | 00000000:57:00.0 Off |                  Off |
+| 30%   25C    P8              26W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   4  NVIDIA GeForce RTX 4090        On  | 00000000:CE:00.0 Off |                  Off |
+| 32%   24C    P8              23W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   5  NVIDIA GeForce RTX 4090        On  | 00000000:D1:00.0 Off |                  Off |
+| 30%   26C    P8              25W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   6  NVIDIA GeForce RTX 4090        On  | 00000000:D5:00.0 Off |                  Off |
+| 31%   26C    P8              20W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+|   7  NVIDIA GeForce RTX 4090        On  | 00000000:D6:00.0 Off |                  Off |
+| 30%   26C    P8              16W / 450W |      3MiB / 24564MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+
+
+0920实验室
+需求是看k8s相关部署
+【todo 公司相关的lora】
+
+
+0922实验室
+vLLM 
+
+公司项目技术选型
+torch环境
+可以用uv管理项目
+
+可以考虑先装clash
+## linux系统配置代理
+
+-----------------
+参考项目
+https://github.com/nelvko/clash-for-linux-install
+详细步骤（无root权限）
+在项目路径下用bash执行下述命令
+mkdir -p ~/.config/mihomo/
+cp resources/zip/mihomo-linux-amd64-compatible-v1.19.2.gz ~/
+cp resources/Country.mmdb ~/.config/mihomo/
+install -D -m +x <(gzip -dc ~/mihomo-linux-amd64-compatible-v1.19.2.gz) ~/bin/mihomo
+
+cat <<'EOF' >~/.config/mihomo/mihomo.sh
+mihomo() {
+    case $1 in
+    on)
+        export http_proxy=http://127.0.0.1:7890
+        export https_proxy=$http_proxy
+        export HTTP_PROXY=$http_proxy
+        export HTTPS_PROXY=$http_proxy
+        export all_proxy=$http_proxy
+        export ALL_PROXY=$http_proxy
+        export NO_PROXY="localhost,127.0.0.1,::1"
+        pgrep -f mihomo || {
+            ~/bin/mihomo -d ~/.config/mihomo/ -f ~/.config/mihomo/config.yaml >& ~/.config/mihomo/log & 
+        }
+        echo '已开启代理环境'
+        ;;
+    off)
+        unset http_proxy
+        unset https_proxy
+        unset HTTP_PROXY
+        unset HTTPS_PROXY
+        unset all_proxy
+        unset ALL_PROXY
+        unset no_proxy
+        unset NO_PROXY
+        pkill -9 -f mihomo
+        echo '已关闭代理环境'
+        ;;
+    esac
+}
+EOF
+
+echo >>~/.bashrc
+echo 'source ~/.config/mihomo/mihomo.sh' >>~/.bashrc
+echo 'mihomo on' >>~/.bashrc
+
+将机场的订阅配置写入到文件：~/.config/mihomo/config.yaml
+若7890端口被占用，在~/.config/mihomo/mihomo.sh 中更改为可用端口。
+mihomo on 开启代理环境，mihomo off 关闭代理环境。
+
+-----------------
+
+## GPU 服务器微调LLM 文档
+
+一。整体架构设计问题：两个方案。
+方案一：意图识别 + 路由 (Pipeline)
+这个方案将任务分解为两个步骤：
+意图识别模型：用一个LoRA微调过的Qwen2.5-7B模型来判断用户输入属于7个意图中的哪一个。
+业回答模型：根据识别出的意图，将问题“路由”或“分发”给另一个专门针对该意图进行LoRA微调过的Qwen2.5-7B模型来生成最终回复。
+好处 (Pros)
+高准确性：每个专业模型只专注于一个狭小的领域，更容易学到深度的知识和特定的回答风格，理论上在各自领域内的回答质量和准确性会**更高、更专业**。
+模块化与可维护性：
+可以**独立更新**某个意图的回答模型，而不会影响其他意图。例如，当退货政策改变时，只需重新微调或更新“退货政策”模型，无需触动整个系统。
+意图识别模块可以单独优化和迭代。
+可控性强**：路由过程清晰可见，容易调试和加入人工规则（例如，如果模型识别置信度低，可以转入人工客服）。
+坏处 (Cons)
+资源开销大：显存和内存占用是最大的缺点，成本高昂。
+延迟更高：一次请求需要串联调用两个模型，响应时间（延迟）会是两个模型推理时间的总和，不利于“快速”回复。
+系统复杂：需要维护多个模型和服务，增加了系统的复杂性和故障点。
+误差传播：如果意图识别模型出错，后面即使专业模型再强，也会给出完全错误的回答。整个系统的上限取决于意图识别模型的准确率。
+方案二：单模型端到端 (Direct Fine-tuning)
+**数据需求**：
+    *   只需要一份整体的问答对数据 `(用户问题, 标准答案)`。数据准备相对简单。
+    *   但数据需要足够丰富，覆盖每个意图的各种问法和可能的问题。
+**技术实现**：
+    *   非常简单。只需要训练一个模型，部署一个模型，调用一次即可。技术栈和运维复杂度大大降低。
+**硬件资源**：
+    *   **资源友好**：只需要加载一个模型实例，显存占用约为14GB（全精度），一张消费级显卡（如RTX 3090/4090）或一张服务器显卡（如V100, L4）即可胜任。
+    *   **计算资源**：一次查询只需一次模型前向传播。
+#### 好处 (Pros)
+1.  **极低的延迟**
+2.  **资源效率高**
+3.  **系统简单可靠**
+4.  **潜在更好的泛化**
+#### 坏处 (Cons)
+1.  **可能存在的性能天花板**：一个模型要学习7个不同领域的知识，可能会发生**知识遗忘或混淆**。在某些非常专业的意图上，其回答的精准度和专业性可能不如方案一中的专业模型。
+2.  **更新不灵活**：如果要更新某一个意图的知识（如修改价格），需要重新微调整个模型，可能会对其他意图的表現产生未知影响（需要非常好的数据配比和训练技巧来避免）。
+对于绝大多数业务场景，AI推荐优先选择【方案二：单模型端到端】
+选择方案一的特殊情况（何时考虑方案一）：
+*   **7个意图的专业领域跨度极大**：例如，一个是法律咨询，一个是医疗诊断，一个是编程代码，一个是情感聊天。这种情况下，单个模型很难同时精通所有领域。
+*   **对某个特定意图的准确率有极致要求**：比如“合规咨询”，99%的准确率都不可接受，必须追求99.9%。这时可以为这个意图单独打造一个专家模型。
+*   **资源（尤其是显存）极度充裕，不关心成本**：如果你有足够的显卡可以同时部署8个模型实例而毫无压力。
+**最终行动建议：**
+1.  **从方案二开始**：收集所有7个意图的高质量问答数据，精心构建训练集，对Qwen2.5-Instruct-7B进行LoRA微调。
+2.  **全面评估**：对微调后的模型进行严格测试，特别是评估它在每个意图上的准确率是否达到业务要求。
+3.  **决策点**：
+    *   如果测试结果**全部达标** -> 完美，直接上线。
+    *   如果**大部分达标，只有1-2个意图表现不佳** -> 可以考虑为这几个表现不佳的意图**额外训练专业模型**，系统退化为一个 **“混合方案”** ：先由单模型处理，如果它识别出是某个难点意图，再调用专业的模型。这样大部分请求还是快的，只在难点请求上牺牲一点速度换取准确率。
+    *   如果测试结果**全部不达标**（可能性很小）-> 再回过头来重新审视数据质量和训练过程，或者考虑方案一。
+
+
+
+二。从引入RAG的角度再次考虑架构问题。
+**核心结论：从技术契合度和系统设计的优雅性来看，【方案一：意图识别 + 路由】更适合与RAG结合。**
+
+下面我们详细分析为什么，以及两种方案在引入RAG后的具体表现。
+
+---
+
+### 方案一 (Pipeline) + RAG：
+这是最经典、最推荐的架构。可以在一个或多个（甚至全部）“专业回答模型”前接入RAG模块。
+**工作流程（以“退货政策”意图为例）：**
+1.  用户输入：”我买了不到一个月的鞋子能退吗？”
+2.  **意图识别模型**：识别出意图为 `退货政策`。
+3.  **路由**：将问题和识别出的意图 `退货政策` 路由到对应的处理管道。
+4.  **RAG检索**：在 `退货政策` 专属的知识库（Vector DB）中检索与用户问题最相关的片段（如：最新的退货规则文档、特殊条款等）。
+5.  **专业模型生成**：将 `用户问题` + `检索到的相关知识` 一起构成Prompt，输入给微调过的“退货政策专业模型”，生成最终回复。
+**好处：**
+1.  **精准检索，效率极高**：
+    *   每个意图都有自己**独立的知识库**。当查询“退货”时，它绝不会去“产品介绍”的知识库里浪费时间进行检索，检索范围小，速度快，准确率高。
+    *   可以为不同意图定制不同的检索策略和Prompt模板。
+2.  **知识隔离与高效更新**：
+    *   更新某个意图的知识（如修改保修条款）只需更新它对应的那个小知识库，完全不会影响其他意图的功能。这是最大的优势。
+    *   知识库的维护非常简单和清晰。
+3.  **模型负担最小化**：
+    *   专业模型只需要专注于“如何根据给定的知识组织语言回答问题”，而不需要自己记忆所有细节。这降低了模型的学习难度，使其表现更稳定。
+4.  **灵活性**：
+    *   你可以**自由选择为哪几个意图添加RAG**。例如，只为“产品规格”、“保修政策”这类需要精确知识的意图配置RAG，而对于“如何使用”这类更依赖模型自身推理能力的意图，则可以不配置RAG。这种精细化配置在方案二中很难实现。
+**坏处：**
+*   系统复杂性比单纯的方案一更高，需要额外维护多个知识库和检索器。
+*   延迟会在方案一的基础上再增加一个检索步骤的时间（但检索通常很快）。
+方案二 (Single Model) + RAG：**笨重且低效**
+在方案二中引入RAG会显得非常别扭，通常只有一种实现方式：**在所有意图前放置一个统一的、巨大的RAG知识库。**
+**工作流程：**
+1.  用户输入：”我买了不到一个月的鞋子能退吗？”
+2.  **统一RAG检索**：在一个包含所有7个意图知识的、庞大的知识库中进行检索。可能会同时检索到退货政策、产品介绍、保修流程等不相关的信息。
+3.  **单模型生成**：将 `用户问题` + `检索到的混合知识` 输入给单一的端到端模型，指望它自己能识别意图并从混合知识中挑选出有用的部分来生成答案。
+**坏处：**
+1.  **检索污染与效率低下**：
+    *   这是最致命的问题。一个关于“退货”的查询，可能会检索出“产品介绍”或“促销活动”的片段，这些噪声信息会干扰模型，导致回答不准确。
+    *   庞大的知识库会导致检索速度变慢，索引维护也更困难。
+2.  **模型负担加重**：
+    *   模型现在需要做三件事：a) 理解用户意图；b) 从一堆可能不相关的检索结果中筛选出有用信息；c) 组织语言回答。这比方案一中“根据给定知识回答问题”的任务要困难得多，更容易出错。
+3.  **更新不灵活**：
+    *   更新任何一小部分知识，都需要对整个庞大的知识库进行重新索引，风险高，影响范围大。
+4.  **无法精细化配置**：
+    *   无法针对特定意图优化检索策略。所有意图都不得不使用同一套检索配置。
+**唯一可能的好处：**
+*   架构**极其简单**，如果你只有一个全局知识库且所有意图都需要共享所有知识（这种情况很少见），那么部署起来快。
+
+
+目前实现的gpu服务器微调项目：
+基于 SWIFT 框架和 Qwen2.5-7B-Instruct 的无人零售店智能客服系统，支持 LoRA 微调、快速推理和效果评估。
+环境
+- **Python**: >= 3.8
+- **CUDA**: 12.2 (支持 RTX 4090 等显卡)
+- **系统**: Linux (推荐)
+- **显卡**: NVIDIA GPU with >= 8GB VRAM (推荐 RTX 4090)
+核心依赖
+dependencies = [
+    "torch",           # PyTorch 深度学习框架
+    "modelscope",      # 模型下载和管理
+    "ms-swift[llm]",   # SWIFT LoRA 微调框架
+    "vllm",            # 高性能推理引擎
+    "tqdm",            # 进度条显示
+]
+
+项目文件结构
+```
+/data1/wxj/llm_project/
+├── pyproject.toml                    # 项目配置和依赖管理
+├── uv.lock                          # 依赖版本锁定文件
+├── README.md                        # 项目说明文档
+├── download_model.py                # 模型下载脚本
+│
+├── data/                            # 数据集目录
+│   ├── dataset_info.json            # 数据集配置信息
+│   ├── dataset.jsonl                # 训练数据 (109条对话)
+│   └── test_conversations.json      # 测试数据集
+│
+├── models/                          # 模型存储目录
+│   └── base_models/                 # 基础模型目录
+│       └── Qwen2.5-7B-Instruct/     # Qwen2.5-7B 基础模型
+│           └── Qwen/Qwen2.5-7B-Instruct/  # 模型文件
+│
+├── outputs/                         # 训练输出目录
+│   └── qwen2.5-7b-instruct-lora-custom/  # LoRA 训练结果
+│       └── v0-20250923-132145/      # 版本化训练输出
+│           ├── checkpoint-7/         # LoRA 适配器权重
+│           ├── images/              # 训练曲线图表
+│           ├── args.json            # 训练参数记录
+│           └── logging.jsonl        # 训练日志
+│
+└── scripts/                         # 脚本工具目录
+    ├── clean_lora_weights_file.py   # 权重清理工具
+    ├── evaluate.py                  # 模型评估脚本
+    ├── fast_inference.py            # vLLM 快速推理
+    └── swift_lora_train.py          # SWIFT LoRA 微调
+```
+项目运行流程
+```bash
+# 1. 进入项目目录
+cd /data1/wxj/llm_project
+# 2. 下载基础模型 (如果还没有)
+uv run python download_model.py
+# 3. LoRA 微调训练
+uv run python scripts/swift_lora_train.py
+# 4. 快速推理测试
+uv run python scripts/fast_inference.py
+```
+
+----------
+
+0923实验室
+
+TODO 首先构建最新的prompt和脚本和数据集
+TODO 评估和调整训练参数
+TODO 产出报告给公司 涵盖环境 数据集 参数 效果（意图和时效）
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------
 
 老师DDL:9月底 发布分布式版本 同时其他人开发应用 并开始写论文
 十月还要迭代一版框架 【作为实验室遗产 供大家写论文用】
-
-
 
 目前已有的架构类图 在下述网站打开图即可
 https://mermaid.live/
@@ -2231,5 +2630,3 @@ note for environment.SpaceTimeEntity "environment"
 note for environment.BaseRelationshipManager "environment"
 note for environment.BaseEvent "environment"
 ```
-
-

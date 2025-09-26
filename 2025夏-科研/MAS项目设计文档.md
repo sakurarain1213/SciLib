@@ -80,6 +80,367 @@ TL  八月开始  先定义API
 
 ## 个人思考
 
+目前已有的架构类图 在下述网站打开图即可
+https://mermaid.live/
+```mermaid
+classDiagram
+%% ========== agent ==========
+class agent.Profile {
+  - configs: Dict[str, ProfileAttribute]
+  + add_attribute(name, value, description)
+  + remove_attribute(name)
+  + get_attribute(name, default)
+  + has_attribute(name)
+  + update_attribute(name, value)
+  + add_attribute_value(name, value)
+  + to_dict()
+  + from_dict(data)
+}
+class agent.ProfileAttribute {
+  - name: str
+  - value: Any
+  - type: Any
+  - description: str
+  + update_value(new_value)
+  + to_dict()
+}
+
+class agent.StateAttribute {
+  - name: str
+  - value: Any
+  - min_value: Any
+  - max_value: Any
+  - optional_values: List[Any]
+  + update(new_value)
+  + update_range(min_value, max_value)
+  + update_optional_value(values)
+  + to_dict()
+}
+class agent.BaseState {
+  - _kv_attributes: Dict[str, StateAttribute]
+  + add_attribute(key, value, min_value, max_value, optional_values)
+  + update_attribute_value(key, value)
+  + get_attribute_value(key)
+  + remove_attribute(key)
+  + update_attribute_optional_values(key, optional_values)
+  + update_range(key, min_value, max_value)
+  + has_attribute(key)
+  + get_attribute_object(key)
+  + get_all_attributes()
+  + get_attribute_keys()
+  + clear_attributes()
+  + to_dict()
+  + from_dict(data)
+}
+class agent.EmotionalState {
+  + add_optional_emotion(emotion)
+  + remove_optional_emotion(emotion)
+  + clear_optional_emotions()
+  + update_emotion(emotion)
+}
+class agent.CognitiveState {
+  + set_focus(focus)
+  + get_focus()
+  + add_working_memory(item, timestamp)
+  + clear_working_memory()
+  + fetch_working_memory(count)
+}
+class agent.PhysicalState {
+  + update_hunger(delta)
+  + update_fatigue(delta)
+  + reset()
+  + hunger_level
+  + get_fatigue_level
+}
+
+agent.BaseState <|-- agent.EmotionalState
+agent.BaseState <|-- agent.CognitiveState
+agent.BaseState <|-- agent.PhysicalState
+agent.Profile o-- agent.ProfileAttribute
+agent.BaseState o-- agent.StateAttribute
+
+class agent.ActionPerception {
+  - agent_id: str
+  - message_queue: Queue
+}
+class agent.EnvironmentPerception {
+  - agent_id: str
+}
+class agent.RelationshipPerception {
+  + get_relationships()
+  + get_agents_by_relationship(relationship_type)
+  + get_agents_from_prompt(prompt)
+}
+class agent.LocationPerception {
+  + get_agent_location(target_agent_id)
+  + get_my_location()
+  + get_nearest_location(location_type)
+  + get_nearby_locations(radius, location_type)
+  + get_nearby_agents(radius)
+}
+class agent.MessagePerception {
+  + get_messages()
+  + add_message(message)
+  + clear_messages()
+  + has_messages()
+  + get_messages_from_others()
+  + get_messages_from_self()
+}
+agent.ActionPerception <|-- agent.MessagePerception
+agent.EnvironmentPerception <|-- agent.RelationshipPerception
+agent.EnvironmentPerception <|-- agent.LocationPerception
+
+class agent.PlanStatus
+class agent.PlanStep {
+  - step_id: str
+  - name: str
+  - description: str
+  - type: PlanType
+  - status: PlanStatus
+  - started_at: datetime
+  - completed_at: datetime
+  - metadata: Dict
+  + start()
+  + complete()
+  + fail()
+  + to_dict()
+}
+class agent.BasePlanning {
+  - agent_id: int
+  - plan_id: str
+  - goal: str
+  - steps: List[PlanStep]
+  - status: PlanStatus
+  - current_step_index: int
+  - created_at: datetime
+  - completed_at: datetime
+  - metadata: Dict
+  - model_service
+  - database_service
+  + generate_plan_with_model(context)
+  + get_goal()
+  + get_steps()
+  + get_current_step_index()
+  + get_current_step()
+  + get_remaining_steps()
+}
+agent.BasePlanning o-- agent.PlanStep
+agent.BasePlanning ..> agent.PlanStatus
+
+class agent.ReflectionType
+class agent.BaseReflection {
+  - agent_id: str
+  - vector_db: Any
+  + reflect(...)
+  + _search_vector_db(query)
+  + save_reflection(reflection_content, reflection_type, metadata)
+  + _call_llm_for_reflection(...)
+}
+class agent.MemoryReflection {
+  + reflect()
+  + _get_recent_workflow_memories()
+  + _call_llm_for_reflection(recent_memories)
+}
+class agent.ConversationReflection {
+  + reflect(other_agent_id)
+  + _get_conversation_history(other_agent_id)
+  + _call_llm_for_reflection(conversation_history)
+}
+class agent.QuestionReflection {
+  + reflect(question)
+  + _call_llm_for_reflection(question, relevant_info)
+}
+agent.BaseReflection <|-- agent.MemoryReflection
+agent.BaseReflection <|-- agent.ConversationReflection
+agent.BaseReflection <|-- agent.QuestionReflection
+
+%% ========== action ==========
+class action.BaseAction {
+  - name: str
+  - description: str
+  - required_params: Dict[str, str]
+  + execute(**kwargs)
+  + get_name()
+  + get_description()
+  + get_required_params()
+  + to_prompt()
+}
+class action.EatAction {
+  + execute(**kwargs)
+}
+class action.SleepAction {
+  + execute(**kwargs)
+}
+class action.MoveAction {
+  + execute(**kwargs)
+}
+class action.OtherAction {
+  - actions: Dict[str, BaseAction]
+  + add_action(action)
+  + remove_action(action_name)
+  + get_available_actions()
+  + get_actions_prompt()
+  + select_action(context, **kwargs)
+  + forward(step_content, **kwargs)
+}
+action.BaseAction <|-- action.EatAction
+action.BaseAction <|-- action.SleepAction
+action.BaseAction <|-- action.MoveAction
+action.OtherAction o-- action.BaseAction
+
+class action.Tool {
+  - name: str
+  - description: str
+  + execute(*args, **kwargs)
+}
+class action.FunctionTool {
+  - func: Callable
+  + execute(*args, **kwargs)
+}
+class action.MCPTool {
+  - mcp_client
+  - method_name: str
+  + execute_async(*args, **kwargs)
+  + execute(*args, **kwargs)
+}
+class action.ToolManager {
+  - tools: Dict[str, Tool]
+  + add_tool(name, tool, description)
+  + add_mcp_tool(name, mcp_client, method_name, description)
+  + remove_tool(name)
+  + get_available_tools()
+  + select_tool(name)
+  + call_tool(name, *args, **kwargs)
+  + call_tool_async(name, *args, **kwargs)
+  + forward(tool_name, *args, **kwargs)
+  + forward_async(tool_name, *args, **kwargs)
+  + get_tool_info(name)
+  + list_tools()
+}
+action.Tool <|-- action.FunctionTool
+action.Tool <|-- action.MCPTool
+action.ToolManager o-- action.Tool
+
+class action.Communicate {
+  - database_manager
+  + analyze_intent(step_content)
+  + get_target_agent_id(intent_analysis)
+  + get_chat_history(agent_id, target_agent_id)
+  + generate_message(agent_id, target_agent_id, step_content, chat_history)
+  + save_message_to_database(agent_id, message, target_agent_id)
+  + send_to_message_queue(message, target_agent_id)
+  + forward(agent_id, step_content)
+}
+
+%% ========== environment ==========
+class environment.Property {
+  - _name: str
+  - _value: Any
+  - _description: str
+  + name
+  + value
+  + description
+  + get_value()
+  + set_value(new_value)
+}
+class environment.ScriptBase {
+  - _properties: Dict[str, Property]
+  + _initialize_properties()
+  + add_property(name, value, description)
+  + get_property(name)
+  + get_property_value(name)
+  + set_property_value(name, value)
+  + list_properties()
+  + remove_property(name)
+}
+environment.ScriptBase o-- environment.Property
+
+class environment.SpaceTimeEntity {
+  - entity_id: str
+  - position: Tuple[float, float]
+  - entity_type: str
+  - name: str
+  - timestamp: datetime
+}
+class environment.SpaceTimeSimulation {
+  - space_time_db
+  + add_entity(entity)
+  + update_entity_position(entity_id, position, timestamp)
+  + get_entity_position_by_name(entity_type, name)
+  + get_entity_position_by_type(entity_type)
+  + get_historical_positions(entity_id, start_time, end_time)
+  + remove_entity(entity_id)
+  + add_agent(agent_id, position, name, timestamp)
+  + add_aoi(aoi_id, position, name, timestamp)
+}
+environment.SpaceTimeSimulation o-- environment.SpaceTimeEntity
+
+class environment.RelationshipType
+class environment.RelationshipData {
+  - source_agent_id: str
+  - target_agent_id: str
+  - relationship_type: RelationshipType
+  - strength: float
+  - created_at: float
+  - updated_at: float
+  - metadata: Dict[str, Any]
+}
+class environment.BaseRelationshipManager {
+  - graph_db
+  + connect_to_graph_db(connection_config)
+  + add_agent(agent_id, agent_properties)
+  + remove_agent(agent_id)
+  + add_relationship(relationship)
+  + update_relationship(relationship)
+  + remove_relationship(source_agent_id, target_agent_id)
+  + get_relationship(source_agent_id, target_agent_id)
+  + get_direct_relationships(agent_id)
+  + find_mutual_relationships(agent_id, relationship_type)
+  + get_network_statistics()
+  + close_connection()
+}
+environment.BaseRelationshipManager ..> environment.RelationshipData
+environment.RelationshipData ..> environment.RelationshipType
+
+class environment.BaseEvent {
+  - id: str
+  - event_type: str
+  - data: str
+  - timestamp: datetime
+  + to_dict()
+}
+class environment.EventManager {
+  - events: List[BaseEvent]
+  + add_event(event_type, data)
+  + get_event(event_id)
+  + get_events_by_type(event_type)
+  + remove_event(event_id)
+  + clear_events()
+  + save_to_database(event)
+  + load_from_database(event_id)
+  + update_in_database(event)
+  + delete_from_database(event_id)
+}
+environment.EventManager o-- environment.BaseEvent
+
+%% ========== 归属模块标注 ==========
+note for agent.Profile "agent"
+note for agent.BaseState "agent"
+note for agent.ActionPerception "agent"
+note for agent.BasePlanning "agent"
+note for agent.BaseReflection "agent"
+note for action.BaseAction "action"
+note for action.Tool "action"
+note for action.Communicate "action"
+note for environment.Property "environment"
+note for environment.ScriptBase "environment"
+note for environment.SpaceTimeEntity "environment"
+note for environment.BaseRelationshipManager "environment"
+note for environment.BaseEvent "environment"
+```
+
+
+
 如果env存了关系网 那么agent是否再存关系还是直接查表？直接查询！
 
 同理 message 存哪：本身act有了 是否要env放一份记录 用于回滚？ 如果有反思和communication表 就回滚【认为回滚先不做 只提供接口】
@@ -2247,23 +2608,224 @@ uv run python scripts/swift_lora_train.py
 uv run python scripts/fast_inference.py
 ```
 
+
+为什么会产生 merged 文件夹？
+这是 SWIFT 框架为了优化推理性能而设计的缓存机制。
+checkpoint-xx 是非常有价值的核心成果adapter   而merged 只是一个为了让推理跑得更快而生成的临时缓存（完整版）。
+管理建议：
+如果需要长期保存或分享微调成果，备份 checkpoint-xx 文件夹就足够了。
+如果磁盘空间紧张，可以随时删除merged 文件夹。下次推理时，它会自动重新生成。
+
 ----------
 
 0923实验室
 
-TODO 首先构建最新的prompt和脚本和数据集
-TODO 评估和调整训练参数
-TODO 产出报告给公司 涵盖环境 数据集 参数 效果（意图和时效）
+个人认为架构最终可以考虑 混合形 需要目前的意图识别 但是只有商品查询去接RAG 剩下意图全部接微调即可 大部分提问都是固定答复或人工
+TODO 首先构建最新的prompt和脚本和数据集 okk
+TODO 评估和调整训练参数 okk
+TODO 产出报告给公司 涵盖环境 数据集 参数 效果（意图和时效） okk
+【
+报告中对数据质量的要求：
+数据质量是决定模型效果的根本因素。请检查dataset.jsonl 文件：
+一致性：确保完全相同的用户问题（user content）总是对应相同或语义一致的期望回答（assistant content）。如果同一个问题在数据里有多种截然不同的答案，模型就会“精神分裂”，不知道该听谁的。
+多样性：同一个意图，尽量用多种不同的问法来表达。这能极大提升模型的泛化能力。
+】
+
+项目需求：
+本地运行然后
+根据log写前端
+
+----------
+
+0924实验室
+
+形成一个公司llm报告 okk
+
+----------
+
+0925实验室
+
+
+cpu服务器配环境
+
+【TODO】挑选主机 统一型号*7。 总价小于 5w   不急 这周末报告给毛
+
+TODO  调研一下MAS前端地图 等逻辑的实现框架 okk
+
+UI 样式   像素 or 2.5D
+平台 web or client
+引擎 框架选择
+实时读取 or 可重复模拟
+自己做or外包
+
+先调研：
+
+#### 如斯坦福小镇框架
+```
+该项目的环境为 Python3.9.12
+由 H5 引擎 Phaser3 开发
+后端用 Django 作为服务器提供 Web 服务。使用的语言为JS/TS
+跨平台兼容：支持桌面和移动端浏览器
+部署简单：无需客户端安装，直接通过浏览器访问
+```
+由于“游戏”本身并不存在用户操作，所以 H5 的页面仅供展示使用；
+前端并不是实时同步展示运算结果！并将运算的结果发给 Web Server 再展示到前端；
+整个架构的链路并不长，用户需要自行维护的东西少，run项目易但可扩展性和自由度并不高
+项目也提供了保存和回放模拟过程的功能，也可以继续上次进行的模拟
+具体而言
+关键点就是为了便于让Agent具象化的理解沙箱世界的空间结构，整个2D地图被映射成树状结构，地图中的每一个tile（或者说每一个坐标），都会包含这些信息
+世界 World 
+├── 区域 Sector 
+    ├── 场所 Arenas 
+        └── 物品 Game Objects
+而Maze类除了创建这样的一个数据结构之外，还提供部分常用方法，比如说获取某个坐标点的上述结构信息、获取某一个区域范围内（比如角色视野范围内）的所有坐标、到达某个坐标点、设置某个坐标点上的物品状态等等，相当于提供了一个地图以及与地图交互的接口】
+[![image.png](https://i.postimg.cc/hGP4WFMb/image.png)](https://postimg.cc/nXgfBPyC)
+
+
+#### aivilization框架
+[![image.png](https://i.postimg.cc/Kvj9yR8P/image.png)](https://postimg.cc/Lndkt4f5)
+```
+技术上【没有明确指出前端框架或图形引擎
+（如是否使用 Unity、Three.js、PixiJS 等），
+但“低成本运行”“实时交互”“网页不关”等特点推测，
+其前端可能采用了轻量级、性能优化的 Web 技术方案】
+```
+
+港科大AI小镇  负责人：“AI游戏将真正爆发”
+
+目前整个小镇大概分三个框架：最底层是单个智能体，拥有完全的自主性，比如自己的记忆系统和推理能力。它们采用异步并发的结构，就像一个个独立运作又能协同的模块，通过多种工作机制组合在一起，构成了整个世界的基础。
+
+中间层是游戏角色，包含了游戏内的经济体系。你可以把这些角色理解成RPG里的人物，它们的行为和互动主要围绕“个体”展开，比如持有物品、参与经济活动等。
+
+最上层是世界规则，也就是定义这个世界里 “能做什么”：会设定几百种 “原子行为”—— 也就是最基础的行动单元，智能体的所有行为输出，都必须在这些设定范围内。这些规则里，有些由大语言模型管理，有些是 “Rule-based”（基于规则的）：比如 “找工作” 是靠大语言模型管理的；而 “学习数值对应多少学历、摘苹果多少小时能得多少个苹果” 这类，就属于 “Rule-based”。这三层联动起来，整个世界就能运转了。
+[![image.png](https://i.postimg.cc/c4bvwNtF/image.png)](https://postimg.cc/ZC6Yz2cN)
+
+
+其它一些游戏的框架 
+#### 星露谷 或 泰拉瑞亚
+```
+两款游戏技术路线相似度极高：
+[![image.png](https://i.postimg.cc/d1D6rVSR/image.png)](https://postimg.cc/Q9GcrhDV)
+
+像素2D美术风格
+客户端平台（非Web）
+XNA/MonoGame框架
+实时游戏模式
+自主开发路线
+项目和独立开发者使用。
+```
+为什么选择XNA/MonoGame？
+MonoGame是XNA游戏库的跨平台开源实现，XNA是微软专注于独立游戏的2D/3D游戏库
+C#语言简单易学，2D游戏开发友好
+性能稳定，经过大量成功项目验证
+社区成熟，教程资源丰富
+
+这两款游戏的成功证明了像素2D + 客户端 + XNA/MonoGame + 自主开发是一个经过验证的优秀技术路线，特别适合中小型游戏
+[![image.png](https://i.postimg.cc/WpQHYdZr/image.png)](https://postimg.cc/mhyjt282)
+
+[![image.png](https://i.postimg.cc/Bv4Tj0KX/image.png)](https://postimg.cc/bZVD54Lh)
+
+#### corekeeper
+```
+像素2D
+经典像素艺术风格，采用俯视角视角
+专业的unity引擎
+```
+Unity为复古8位游戏提供专门的2D像素完美工具 2D breakout game using Phaser - Game development | MDN
+丰富的Unity像素艺术游戏生态系统 Phaser Editor 2D | HTML5 Game IDE
+更好的跨平台支持和现代化开发体验
+Unity Entities等先进技术提供更好的性能
+
+[![image.png](https://i.postimg.cc/wBZYggMs/image.png)](https://postimg.cc/67rmhsd9)
+
+#### 饥荒
+```
+【自研2.5D 引擎】
+内部代号 "DSEngine"
+渲染：自写 OpenGL 2.1 + DirectX 9 双后端，Sprite 批处理 + 动态图集（atlas-0.tex / atlas-1.tex…）
+动画：二进制格式 *.anim.bin + *.build.bin + *.tex，自带工具 autocompiler / krane 把 Spine-SCML 导出成游戏二进制流
+物理：2D 轴对齐 AABB 碰撞，无第三方物理库；高度轴（Z-Height）只做逻辑判定，不参与真实物理模拟
+脚本：嵌入式 Lua 5.1（原版）/LuaJIT 2.1（联机版），所有玩法逻辑、AI、组件系统全脚本化
+音效：FMOD Ex 低阶 API，事件系统自己再包一层
+UI：自写 "FE" 框架，Lua 端用 JSON + 9-patch 拼接；PC 版界面和 PS4 / Switch 共用同一套代码
+平台抽象：Klei 自己写的 "Kore" 层，类似 SDL，负责窗口、输入、线程、文件、POSIX/Win32 差异
+```
+[![image.png](https://i.postimg.cc/52VFxQj8/image.png)](https://postimg.cc/zVxf7BCf)
+
+
+等等
+
+进而得出自己的架构设计
+总结：建议采用Phaser系
+首选技术栈：Phaser 3 + TypeScript + Vite + WebGL/Canvas
+核心优势：
+轻量、浏览器原生运行：无需插件，直接通过 HTML5 Canvas/WebGL 渲染。
+快速开发与热更新：搭配 Vite，开发体验极佳。
+AI 接入友好：Phaser 是基于 JavaScript 的引擎，天然适合调用 Web API（如大模型服务）。
+社区成熟：大量教程、插件、示例项目，适合快速原型开发。
+微信/小游戏适配强：Phaser 有成熟的微信小游戏适配方案。
+
+
+**Phaser系**
+•《2048 网页版》《合成大西瓜》《跳一跳》H5 复刻版
+• 微信小游戏《羊了个羊》早期原型
+
+React+Pixi 系
+• 淘宝《双 11 猫养车》互动游戏
+• 支付宝《蚂蚁森林》能量收集小游戏
+适合 UI 复杂的互动应用，但游戏逻辑处理不如 Phaser 原生方便。
+Construct 系
+•《The Next Penelope》（Steam 竞速）
+•《Super Ubie Island REMIX》（Switch 平台）
+GameMaker 系
+•《Undertale》《Hyper Light Drifter》《Katana ZERO》《Hotline Miami》
+• 国产《霓虹深渊》《了不起的修仙模拟器》（早期原型）
+Godot 系
+•《Ex Zodiac》《Brotato》《Cassette Beasts》《Haiku the Robot》
+• 国内 GGJ 48h 作品《星之桥》《快递小哥》
+上述三者导出 HTML5 支持有限，或体积偏大，或商业化限制。
+Unity 2D 系
+功能强但体积大，加载慢，不适合轻量级网页游戏。
+•《Hollow Knight》《Ori》系列《Dead Cells》《茶杯头》
+• 国产《太吾绘卷》《隐形守护者》《霓虹深渊：无限》
+
+【元气骑士等等】
+
+----------
+
+0926实验室
+已经确定前端展示路线
+【生成可交互的物品】
+【全局一张图 房间大 导致地图很大】
+【后期做】
+
+
+
+一个新路线：
+LLM全套随机生成功能 作为并行可选功能开发
+作用：从地图 profile到关系。甚至到act交互到插件代码 都全套生成 但是不保证规模效应等成本和有效性
+可以作为开发阶段或用户hub的toolkit 进行数据和plugin的生产和共享手段之一
+
+
+【okk】要求做MAS的debug的前端平台
+需求1 tick作为进度条 无论是否上下滚动页面 永远显示在底部 可拖动 可键盘左右控制单个tick的前后查看。run 和agent选取依然作为下拉框
+需求2 Agent等四大模块分区如何展示 下拉或什么 考虑一下
+需求3 左侧应该显示完整log的长条，可滚动。单击左侧log的某条或单击展示页标签应该互相跳转。并且左侧log条应该特殊颜色标注未解析的log。
+以上okk
+需求4 现在要求Agent下的子元素的排列顺序变一下。应该是Perceive。State。Plan。act。Reflect。okk
+需求5 在保证内部模块可以滚动查看 每个具体log方块（即class=log-entry level-info等）元素的高度不被压缩的前提下，限制agent等四大模块的高度是一个固定值。
+需求6 要求点击某个具体的log 能在鼠标旁生成一个悬浮窗
+以上okk
 
 
 
 
 
+----------
 
+0928实验室
 
-
-
-
+【公司】下周四前再训练一版 见0926 dataset
 
 
 
@@ -2272,361 +2834,10 @@ TODO 产出报告给公司 涵盖环境 数据集 参数 效果（意图和时�
 老师DDL:9月底 发布分布式版本 同时其他人开发应用 并开始写论文
 十月还要迭代一版框架 【作为实验室遗产 供大家写论文用】
 
-目前已有的架构类图 在下述网站打开图即可
-https://mermaid.live/
-```mermaid
-classDiagram
-%% ========== agent ==========
-class agent.Profile {
-  - configs: Dict[str, ProfileAttribute]
-  + add_attribute(name, value, description)
-  + remove_attribute(name)
-  + get_attribute(name, default)
-  + has_attribute(name)
-  + update_attribute(name, value)
-  + add_attribute_value(name, value)
-  + to_dict()
-  + from_dict(data)
-}
-class agent.ProfileAttribute {
-  - name: str
-  - value: Any
-  - type: Any
-  - description: str
-  + update_value(new_value)
-  + to_dict()
-}
+【项目计划】
+规模9月底验证
+浙大和老鼠乌托邦并行
+10月 做好两个lab 不仅跑通 10.1号开始写论文。  
+月底10.20号要发文 技术性可以发。
+要有展示度【核心】 但宣传月底
 
-class agent.StateAttribute {
-  - name: str
-  - value: Any
-  - min_value: Any
-  - max_value: Any
-  - optional_values: List[Any]
-  + update(new_value)
-  + update_range(min_value, max_value)
-  + update_optional_value(values)
-  + to_dict()
-}
-class agent.BaseState {
-  - _kv_attributes: Dict[str, StateAttribute]
-  + add_attribute(key, value, min_value, max_value, optional_values)
-  + update_attribute_value(key, value)
-  + get_attribute_value(key)
-  + remove_attribute(key)
-  + update_attribute_optional_values(key, optional_values)
-  + update_range(key, min_value, max_value)
-  + has_attribute(key)
-  + get_attribute_object(key)
-  + get_all_attributes()
-  + get_attribute_keys()
-  + clear_attributes()
-  + to_dict()
-  + from_dict(data)
-}
-class agent.EmotionalState {
-  + add_optional_emotion(emotion)
-  + remove_optional_emotion(emotion)
-  + clear_optional_emotions()
-  + update_emotion(emotion)
-}
-class agent.CognitiveState {
-  + set_focus(focus)
-  + get_focus()
-  + add_working_memory(item, timestamp)
-  + clear_working_memory()
-  + fetch_working_memory(count)
-}
-class agent.PhysicalState {
-  + update_hunger(delta)
-  + update_fatigue(delta)
-  + reset()
-  + hunger_level
-  + get_fatigue_level
-}
-
-agent.BaseState <|-- agent.EmotionalState
-agent.BaseState <|-- agent.CognitiveState
-agent.BaseState <|-- agent.PhysicalState
-agent.Profile o-- agent.ProfileAttribute
-agent.BaseState o-- agent.StateAttribute
-
-class agent.ActionPerception {
-  - agent_id: str
-  - message_queue: Queue
-}
-class agent.EnvironmentPerception {
-  - agent_id: str
-}
-class agent.RelationshipPerception {
-  + get_relationships()
-  + get_agents_by_relationship(relationship_type)
-  + get_agents_from_prompt(prompt)
-}
-class agent.LocationPerception {
-  + get_agent_location(target_agent_id)
-  + get_my_location()
-  + get_nearest_location(location_type)
-  + get_nearby_locations(radius, location_type)
-  + get_nearby_agents(radius)
-}
-class agent.MessagePerception {
-  + get_messages()
-  + add_message(message)
-  + clear_messages()
-  + has_messages()
-  + get_messages_from_others()
-  + get_messages_from_self()
-}
-agent.ActionPerception <|-- agent.MessagePerception
-agent.EnvironmentPerception <|-- agent.RelationshipPerception
-agent.EnvironmentPerception <|-- agent.LocationPerception
-
-class agent.PlanStatus
-class agent.PlanStep {
-  - step_id: str
-  - name: str
-  - description: str
-  - type: PlanType
-  - status: PlanStatus
-  - started_at: datetime
-  - completed_at: datetime
-  - metadata: Dict
-  + start()
-  + complete()
-  + fail()
-  + to_dict()
-}
-class agent.BasePlanning {
-  - agent_id: int
-  - plan_id: str
-  - goal: str
-  - steps: List[PlanStep]
-  - status: PlanStatus
-  - current_step_index: int
-  - created_at: datetime
-  - completed_at: datetime
-  - metadata: Dict
-  - model_service
-  - database_service
-  + generate_plan_with_model(context)
-  + get_goal()
-  + get_steps()
-  + get_current_step_index()
-  + get_current_step()
-  + get_remaining_steps()
-}
-agent.BasePlanning o-- agent.PlanStep
-agent.BasePlanning ..> agent.PlanStatus
-
-class agent.ReflectionType
-class agent.BaseReflection {
-  - agent_id: str
-  - vector_db: Any
-  + reflect(...)
-  + _search_vector_db(query)
-  + save_reflection(reflection_content, reflection_type, metadata)
-  + _call_llm_for_reflection(...)
-}
-class agent.MemoryReflection {
-  + reflect()
-  + _get_recent_workflow_memories()
-  + _call_llm_for_reflection(recent_memories)
-}
-class agent.ConversationReflection {
-  + reflect(other_agent_id)
-  + _get_conversation_history(other_agent_id)
-  + _call_llm_for_reflection(conversation_history)
-}
-class agent.QuestionReflection {
-  + reflect(question)
-  + _call_llm_for_reflection(question, relevant_info)
-}
-agent.BaseReflection <|-- agent.MemoryReflection
-agent.BaseReflection <|-- agent.ConversationReflection
-agent.BaseReflection <|-- agent.QuestionReflection
-
-%% ========== action ==========
-class action.BaseAction {
-  - name: str
-  - description: str
-  - required_params: Dict[str, str]
-  + execute(**kwargs)
-  + get_name()
-  + get_description()
-  + get_required_params()
-  + to_prompt()
-}
-class action.EatAction {
-  + execute(**kwargs)
-}
-class action.SleepAction {
-  + execute(**kwargs)
-}
-class action.MoveAction {
-  + execute(**kwargs)
-}
-class action.OtherAction {
-  - actions: Dict[str, BaseAction]
-  + add_action(action)
-  + remove_action(action_name)
-  + get_available_actions()
-  + get_actions_prompt()
-  + select_action(context, **kwargs)
-  + forward(step_content, **kwargs)
-}
-action.BaseAction <|-- action.EatAction
-action.BaseAction <|-- action.SleepAction
-action.BaseAction <|-- action.MoveAction
-action.OtherAction o-- action.BaseAction
-
-class action.Tool {
-  - name: str
-  - description: str
-  + execute(*args, **kwargs)
-}
-class action.FunctionTool {
-  - func: Callable
-  + execute(*args, **kwargs)
-}
-class action.MCPTool {
-  - mcp_client
-  - method_name: str
-  + execute_async(*args, **kwargs)
-  + execute(*args, **kwargs)
-}
-class action.ToolManager {
-  - tools: Dict[str, Tool]
-  + add_tool(name, tool, description)
-  + add_mcp_tool(name, mcp_client, method_name, description)
-  + remove_tool(name)
-  + get_available_tools()
-  + select_tool(name)
-  + call_tool(name, *args, **kwargs)
-  + call_tool_async(name, *args, **kwargs)
-  + forward(tool_name, *args, **kwargs)
-  + forward_async(tool_name, *args, **kwargs)
-  + get_tool_info(name)
-  + list_tools()
-}
-action.Tool <|-- action.FunctionTool
-action.Tool <|-- action.MCPTool
-action.ToolManager o-- action.Tool
-
-class action.Communicate {
-  - database_manager
-  + analyze_intent(step_content)
-  + get_target_agent_id(intent_analysis)
-  + get_chat_history(agent_id, target_agent_id)
-  + generate_message(agent_id, target_agent_id, step_content, chat_history)
-  + save_message_to_database(agent_id, message, target_agent_id)
-  + send_to_message_queue(message, target_agent_id)
-  + forward(agent_id, step_content)
-}
-
-%% ========== environment ==========
-class environment.Property {
-  - _name: str
-  - _value: Any
-  - _description: str
-  + name
-  + value
-  + description
-  + get_value()
-  + set_value(new_value)
-}
-class environment.ScriptBase {
-  - _properties: Dict[str, Property]
-  + _initialize_properties()
-  + add_property(name, value, description)
-  + get_property(name)
-  + get_property_value(name)
-  + set_property_value(name, value)
-  + list_properties()
-  + remove_property(name)
-}
-environment.ScriptBase o-- environment.Property
-
-class environment.SpaceTimeEntity {
-  - entity_id: str
-  - position: Tuple[float, float]
-  - entity_type: str
-  - name: str
-  - timestamp: datetime
-}
-class environment.SpaceTimeSimulation {
-  - space_time_db
-  + add_entity(entity)
-  + update_entity_position(entity_id, position, timestamp)
-  + get_entity_position_by_name(entity_type, name)
-  + get_entity_position_by_type(entity_type)
-  + get_historical_positions(entity_id, start_time, end_time)
-  + remove_entity(entity_id)
-  + add_agent(agent_id, position, name, timestamp)
-  + add_aoi(aoi_id, position, name, timestamp)
-}
-environment.SpaceTimeSimulation o-- environment.SpaceTimeEntity
-
-class environment.RelationshipType
-class environment.RelationshipData {
-  - source_agent_id: str
-  - target_agent_id: str
-  - relationship_type: RelationshipType
-  - strength: float
-  - created_at: float
-  - updated_at: float
-  - metadata: Dict[str, Any]
-}
-class environment.BaseRelationshipManager {
-  - graph_db
-  + connect_to_graph_db(connection_config)
-  + add_agent(agent_id, agent_properties)
-  + remove_agent(agent_id)
-  + add_relationship(relationship)
-  + update_relationship(relationship)
-  + remove_relationship(source_agent_id, target_agent_id)
-  + get_relationship(source_agent_id, target_agent_id)
-  + get_direct_relationships(agent_id)
-  + find_mutual_relationships(agent_id, relationship_type)
-  + get_network_statistics()
-  + close_connection()
-}
-environment.BaseRelationshipManager ..> environment.RelationshipData
-environment.RelationshipData ..> environment.RelationshipType
-
-class environment.BaseEvent {
-  - id: str
-  - event_type: str
-  - data: str
-  - timestamp: datetime
-  + to_dict()
-}
-class environment.EventManager {
-  - events: List[BaseEvent]
-  + add_event(event_type, data)
-  + get_event(event_id)
-  + get_events_by_type(event_type)
-  + remove_event(event_id)
-  + clear_events()
-  + save_to_database(event)
-  + load_from_database(event_id)
-  + update_in_database(event)
-  + delete_from_database(event_id)
-}
-environment.EventManager o-- environment.BaseEvent
-
-%% ========== 归属模块标注 ==========
-note for agent.Profile "agent"
-note for agent.BaseState "agent"
-note for agent.ActionPerception "agent"
-note for agent.BasePlanning "agent"
-note for agent.BaseReflection "agent"
-note for action.BaseAction "action"
-note for action.Tool "action"
-note for action.Communicate "action"
-note for environment.Property "environment"
-note for environment.ScriptBase "environment"
-note for environment.SpaceTimeEntity "environment"
-note for environment.BaseRelationshipManager "environment"
-note for environment.BaseEvent "environment"
-```

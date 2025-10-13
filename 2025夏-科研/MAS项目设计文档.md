@@ -2807,6 +2807,7 @@ LLM全套随机生成功能 作为并行可选功能开发
 可以作为开发阶段或用户hub的toolkit 进行数据和plugin的生产和共享手段之一
 
 
+
 【okk】要求做MAS的debug的前端平台
 需求1 tick作为进度条 无论是否上下滚动页面 永远显示在底部 可拖动 可键盘左右控制单个tick的前后查看。run 和agent选取依然作为下拉框
 需求2 Agent等四大模块分区如何展示 下拉或什么 考虑一下
@@ -2825,7 +2826,128 @@ LLM全套随机生成功能 作为并行可选功能开发
 
 0928实验室
 
-【公司】下周四前再训练一版 见0926 dataset
+okk 主机问题 暂定geekpro
+
+
+【todo okk】招募
+我们是软院做多智能体系统开发的实验室，现诚挚有偿招募开发同学：要求有一定unity引擎开发经验，为智能体AI驱动的游戏开发可视化界面，主要负责2D像素风格的美术场景和游戏逻辑的实现。十月二十日左右完成项目开发。薪酬面议～详询vx
+
+【TODO】unity的设想 考虑采用 因为维护成本相对低。类似视频评论区 要求agent增加生活压力 本地部署表达出更真实的而非完全积极的回复。
+```
+2D 像素俯视小游戏基础框架
+摄像机设置
+在 Main Camera 改成 Orthographic，Size 调整视野。
+确保分辨率和像素风格匹配（比如 16x16、32x32）。
+Tilemap 地图（方便做小镇场景）
+GameObject → 2D Object → Tilemap → Rectangular。
+Tilemap 可以拼接像素地砖（未来你有素材时就能直接用）。
+没有素材时，可以先用纯色方块（占位符）作为 Tile。
+
+人物控制
+新建一个 Player GameObject，用一个方块或临时图片表示。
+给它加 Rigidbody2D（动力学）+ BoxCollider2D（碰撞）。
+写一个 PlayerController.cs 脚本，实现上下左右移动：
+
+接入后端（Agent 模拟）
+若已有一个 后端服务（REST / WebSocket），Unity 可以这样接入：
+REST API
+Unity 自带 UnityWebRequest，可以请求 JSON
+
+可以在 Update() 或定时调用获取 agent 的行为。
+WebSocket（实时同步）
+推荐用 BestHTTP 或 NativeWebSocket 插件，让 Unity 与后端实时通信。
+用于 多人交互 / Agent 动态决策。
+
+
+网页运行
+打包到 WebGL
+在 Unity → File → Build Settings → 选择 WebGL。
+点击 Switch Platform → Build。
+生成的 index.html + Build/ 文件夹可以放到任何 Web 服务器上运行。
+部署方式
+轻量可直接放到 静态网页托管（Netlify、Vercel、阿里云 OSS）。
+如果和后端交互，要保证 CORS 设置正确。
+
+```
+
+
+
+----------
+
+0929实验室
+
+【Todo】unity 自己也看看
+10.15前 两大应用的美术（场景 人物 道具）
+10.15 后段给出定义好interface 开始mock数据
+10.20 联调 运行
+10.30 完整交付
+需求是 好玩/好看 > 基准
+
+TODO 明天负责搭建 找人或自己研究
+
+
+
+目前整理一个文档okk
+
+六、交付目标
+
+提供两套地图：玉泉校区与老鼠乌托邦，并共享交互逻辑。
+具备昼夜地图切换
+支持w级多单位场景（同屏可容纳大规模角色）
+支持单击展示 / 角色状态展示 / 对话气泡
+具备角色多样性（支持1w种多样角色；多种老鼠）
+可 Web 打包运行（Unity WebGL）
+
+
+【待定 前端加一些运行曲线 并做log适配 如token消耗 每tick耗时等等】
+【待定】项目的结偶功能和架构优势的取名考虑：
+plugin
+c（component cohesion coupling）
+controller
+society centric - plugin pluggable
+mas  
+或者古典创世神名字
+
+
+----------
+
+0930实验室
+
+结论：地图搭建自己干
+可以找开源库做 dll 10.9前
+
+
+地图框架搭建：类比
+16pixel边长 一个地砖
+72pixel 宽度 街道
+16宽 * 24高 小人
+大地图：4k 高度  5k宽度
+玉泉比例：1:2   因此s不变 玉泉像素3.16k * 6.32k
+若每个tile瓦片的宽度是16pixel。那么长宽约200*400个瓦片
+十个瓦片为一个格子宽=>得到面积为20*40=800格子。
+有相关开源库或工具进行地图绘制【没有直接免费方案 个人采用直角化 图层覆盖】
+
+
+【教程】
+使用tilemap 瓦片地图进行绘制。
+精灵图片拖动前务必在单击素材后 在inspector中设置 pixels per unit（PPU）为**16** 
+底部apply后 再拖动加入调色盘。
+
+绘制时，将默认笔刷替换为CoordinateBrush 用于开发阶段显示笔刷所在坐标。
+
+注意绘制图层。
+在绘制前选择好
+Tilemap-entity 1 有碰撞体积实体 比如道具 植物 建筑 水体等
+Tilemap-ground 0 大部分地砖 无碰撞体积
+Tilemap-sky	远山、天空盒	-1 	纯背景，不放碰撞体
+
+注意对ground地砖图层增加了显示网格的脚本 可以随时关闭。
+
+注意碰撞组件都没加 走路的时候测试一下建筑等碰撞
+
+
+版本控制问题：本地直接打开version control checkin即可自动提交到云端。
+拉取：加入项目。由我add member。选择pixel project即可。
 
 
 
@@ -2840,4 +2962,154 @@ LLM全套随机生成功能 作为并行可选功能开发
 10月 做好两个lab 不仅跑通 10.1号开始写论文。  
 月底10.20号要发文 技术性可以发。
 要有展示度【核心】 但宣传月底
+
+
+----------
+
+1001实验室
+写unity脚本 搭建地图 框架基本搭建完成。
+
+----------
+
+1007实验室
+
+unity需求
+
+
+
+##### 音效收集需求 okk已提出
+（
+背景音方面 一个统一的长bgm作为背景音 
+音效方面 走路=踢踏音 说话=小黄人音 状态改变=冒泡音 三种即可
+）
+
+
+##### 老鼠地图框架绘制  okk
+【考虑120度的 Isometric Z as Y 等距风格 找素材或绘制】
+注意一定选择自定义笔刷 并设置对应高度后再分10层绘制。其他无殊
+测绘  utopia总面积是campus的1/5即可 即120*120的tile
+
+
+##### 9号 unity开会
+同步内容： 介绍项目协作和框架 介绍需求 然后验收美术结果
+
+
+----------
+
+1009实验室
+
+##### 确定一个campus scene的建筑素材的需求文档 okk
+
+需求 根据照片改一下乌托邦地图 okk
+
+unity开会 okk
+
+----------
+
+1010实验室
+
+okk
+根据unity校园地图建筑的分类和中心点。再根据https://zjuers.com/welcome/life/campus/
+提供给后端坐标文档。lwx
+
+
+unity
+完成两大场景结构的搭建
+
+处理好了 Isometric Z as Y中的渲染前后遮挡关系问题 
+一定要设置一个网格的render的type是individual而非chunk
+然后去项目设置的graphic中设置camera的transparency sort mode = custom axis 且xyz是0 1 -0.26。这样就可以正确排序了！
+
+
+
+后续等轴场景下可能的移动坐标问题。应该给每个老鼠挂载一个x y 逻辑高度h ->到实际显示的xyz坐标的一个映射关系组件。可以问gemini 具体来说：
+
+```
+虽然场景在渲染上是二维的，但游戏逻辑必须是三维的，才能正确处理高度、遮挡、跳跃、飞行等行为。
+我们通常需要维护两套坐标系统：
+逻辑坐标 (Grid Coordinates): 这是游戏“思考”用的坐标，是一个 Vector3Int，例如 (x, y, h) 或者 (gridX, gridY, height)。
+gridX, gridY: 代表在二维菱形网格上的位置。
+height: 代表在这个网格点上，距离地面的高度层级。
+
+世界坐标 (World Coordinates): 这是物体在 Unity 场景中实际的 transform.position，是一个 Vector3。这是游戏“显示”用的坐标。
+
+脚本的核心任务，就是将逻辑坐标 (gridX, gridY, height) 转换为正确的显示用的世界坐标 transform.position，并处理好渲染的先后顺序。
+
+1. 定义高度单位
+首先需要决定逻辑上的 1 单位高度，对应到世界坐标Y轴上是多少。这通常取决于你的美术资源。
+例如，一个标准方块的高度是 0.5 个 Unity 单位，那么你的“高度步进值”（Height Step）就是 0.5f。
+C#
+public float tileHeightUnit = 0.5f; // 逻辑高度每增加1，世界坐标Y值增加0.5
+2. 坐标转换公式
+当你要把一个逻辑坐标 (gridX, gridY, height) 的物体放到场景中时，它的世界坐标计算分为两步：
+第一步：计算地面位置
+使用 tilemap.GetCellCenterWorld() 方法获取 (gridX, gridY) 在 height = 0 时的世界坐标。这是物体的“脚底”所在的菱形地块的中心点。
+Vector3 groundPos = tilemap.GetCellCenterWorld(new Vector3Int(gridX, gridY, 0));
+第二步：叠加高度偏移
+在地面位置的基础上，将Y轴坐标根据逻辑高度 height 进行抬升。
+Vector3 finalPos = groundPos + new Vector3(0, height * tileHeightUnit, 0);
+3. 处理渲染排序（至关重要！）
+只移动Y轴坐标是不够的！想象一下，一个在(5, 10)位置的高个子，和一个在(5, 11)位置的矮个子。虽然高个子Y坐标更高，但他应该被渲染在矮个子的前面，因为他的gridY更小（更靠近屏幕下方）。
+这就是所谓的精灵排序 (Sprite Sorting)。你需要根据物体的逻辑Y坐标来动态修改它的 SpriteRenderer 的 Sorting Order。
+排序规则: 逻辑 gridY 越大的物体，视觉上越“靠后”，因此 Sorting Order 应该越小（越负）。
+计算公式: 一个简单的公式是 sortingOrder = -gridY。为了避免冲突，通常会乘以一个倍数，例如 sortingOrder = -gridY * 10。
+如果人物由多个部件组成，强烈建议使用 Sorting Group 组件，你只需要设置父物体上 Sorting Group 的 Order 即可。
+```
+
+
+----------
+
+1011实验室
+
+
+【TODO 公司需求】
+下周四前再训练一版 见0926 dataset okk
+
+【公司数据问题：回环收听 不能把模型回答作为下一个音频输入成数据】
+【问题要完整 不能连续追加成文本作为多条数据
+禁止。
+禁止未成。
+禁止未成年人。
+禁止未成年人更。
+禁止未成年人更为。
+禁止未成年人购买。
+禁止未成年人购买烟。
+禁止未成年人购买烟酒。
+】
+数据清洗完毕。开始微调。
+
+要求1 先人工调整一下结果的评分 重点看低分的 可能语义回答也很好
+要求2 再与1.0做对比报告 节后第一天反馈量化对比数据。
+
+
+----------
+
+1013实验室
+
+TODO 前端回放需求：单独为unity开一个DB 存储每tick收到的socket请求 直接重播即可。
+
+
+
+TODO 公司需求
+要求1 先人工调整一下结果的评分 重点看低分的 可能语义回答也很好
+要求2 再与1.0做对比报告 节后第一天反馈量化对比数据。
+
+
+TODO 周二下午讨论
+调研分类问题
+mas框架目前都是开发者在提定义
+暂定分类见照片 要提出比较完备 命名合理的架构分类
+1 单体 2 单体分布式 3 （微服务 但很少用） 4 自己提出的micro-component 再议
+
+
+
+TODO老鼠需求：需要有一个数字框ui表示在场的老鼠数量
+老鼠的出生和死去不需要动作 直接增删贴图即可
+老鼠贴图 按照颜色区分小（白色）中（黄）老（灰色）！ 按照蝴蝶结区分雌雄
+老鼠需要一堆折线图反映各种指标 需要后端提供 前端显示即可。
+通用需求：懒加载 ！浏览器一定会爆炸 所以只渲染摄像头内的agent
+老鼠的家 食物 水等位置坐标用id传递。前端映射成坐标
+
+TODO 由于unity cloud免费项目只有3个permission编辑seat
+因此考虑Unity 6 项目与 GitHub 集成，完全脱离 Unity Cloud 的版本控制。或者美术同学文件交给我。
 

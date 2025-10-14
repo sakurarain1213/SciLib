@@ -3086,20 +3086,52 @@ Vector3 finalPos = groundPos + new Vector3(0, height * tileHeightUnit, 0);
 
 1013实验室
 
+
 TODO 前端回放需求：单独为unity开一个DB 存储每tick收到的socket请求 直接重播即可。
-
-
-
-TODO 公司需求
-要求1 先人工调整一下结果的评分 重点看低分的 可能语义回答也很好
-要求2 再与1.0做对比报告 节后第一天反馈量化对比数据。
 
 
 TODO 周二下午讨论
 调研分类问题
 mas框架目前都是开发者在提定义
 暂定分类见照片 要提出比较完备 命名合理的架构分类
-1 单体 2 单体分布式 3 （微服务 但很少用） 4 自己提出的micro-component 再议
+【1 单体 2 单体分布式 3 （微服务 但很少用） 4 自己提出的micro-component 再议】
+【新版分类 分层架构 如camel;pipeline架构如scope; 微内核 with modular core 如我们;】
+目前有的多智能体框架
+
+MetaGPT（强SOP鼻祖（标准操作程序） 多 Agent 团队）  
+AutoGen （事件驱动/编程式的 Agent 框架）
+LangGraph（流程图 dify可视化）
+AutoGPT
+以高效任务分解和角色职责为核心，
+CrewAI （集中式控制的协作）
+Camel  1.4w star （回合驱动 剧本注入）
+AgentScope（分布式 SOP actor based 消息传递 编排）
+
+BeeAI
+
+生成式模拟范式
+AgentSociety 模拟应用 
+TradingAgents 2w star【聚焦于金融交易的具体功能的具体应用框架】
+agno 3w star（类似langgraph）支持多模态 做应用到框架 灵活度大的py框架 偏向agent 可以有team。有rag有推理 支持五个级别的agent 从工具 知识 记忆 到状态和决策团队和工作流
+openai Agents-SDK（前身是openai/swarm 2w star）用户自行写多智能体编排   Agents是SDK的基础构建块支持工具记忆等
+open manus
+OWL
+deer-flow 1.7w star 字节基于deep research开源 无缝集成 MCP 深度研究 生成含图像的报告
+
+
+老师意见：只要能支持多智能体 无论是否是宽泛的应用 就要拉过来比较 说明为什么不适合社会模拟。
+先定义好技术点。定义社会模拟一定要具备什么技术点。比如一定要支持大规模 一定要异步通信 才能说不适合做社会模拟。
+再去做表格。
+再说架构底层“特点”有哪些（尽量往目前划分套 老师认为目前架构就这样 而且很专业 已经最底层了）。然后是各自架构的优势是什么。再看目前【所有应用框架】在社会模拟上的勾叉有哪些。
+老师最终要求任何论文 要一句话说清楚特点。high level的顶层设计，才能推销得好。
+
+
+等整理好技术点之后 去看每个框架的技术点和三大分类。
+
+
+
+
+
 
 
 
@@ -3110,6 +3142,29 @@ TODO老鼠需求：需要有一个数字框ui表示在场的老鼠数量
 通用需求：懒加载 ！浏览器一定会爆炸 所以只渲染摄像头内的agent
 老鼠的家 食物 水等位置坐标用id传递。前端映射成坐标
 
+
+
+
+
+
 TODO 由于unity cloud免费项目只有3个permission编辑seat
 因此考虑Unity 6 项目与 GitHub 集成，完全脱离 Unity Cloud 的版本控制。或者美术同学文件交给我。
 
+----------
+
+1014实验室
+
+TODO
+统计一下硬件需求。
+gpu：1k个 agent 试试显卡需求
+cpu：前端unity + plugin hub（oss 放源码）。
+
+
+
+TODO 公司需求
+要求1 先人工调整一下结果的评分 重点看低分的 可能语义回答也很好
+要求2 再与1.0做对比报告 节后第一天反馈量化对比数据。
+
+
+
+晚上开会验收

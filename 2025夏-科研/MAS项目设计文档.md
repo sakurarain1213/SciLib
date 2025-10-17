@@ -3200,52 +3200,48 @@ deer-flow
 
 MAS系统架构 (Multi-Agent System Architecture)
 │
-├── 维度一：Agent个体的类型
+├── 维度一：Agent个体的类型。视角在于agent本身 这个维度本来就有点局限在agent-centric 的观念上。
 │ │
 │ ├── 1. 整体/单体/集中 架构 
-│ │ └── 描述：Agent的所有能力（感知、决策、行动）都紧密耦合在一个单一模块中，难以修改和扩展。
+│ └── 描述：Agent的所有能力（感知、决策、行动）都紧密耦合在一个单一模块中，难以修改和扩展。
 │ │
-│ └── 2. 模块化/组件化架构 (Modular/Component-Based Architecture)
+│ ├── 2 分层架构 (Layered Architecture)
+│ └── 描述：按抽象级别或功能将能力组织成堆叠的层次。
 │ │
-│ ├── 2.1 分层架构 (Layered Architecture)
-│ │ └── 描述：按抽象级别或功能将能力组织成堆叠的层次。
+│ ├── 3 面向服务的架构 (SOA, Service-Oriented Architecture)
+│ └── 描述：将Agent的能力封装成内部或外部可调用的服务。
 │ │
-│ ├── 2.2 面向服务的架构 (SOA, Service-Oriented Architecture)
-│ │ └── 描述：将Agent的能力封装成内部或外部可调用的服务。
-│ │
-│ ├── 2.3 组件+插件的组合模式架构 （Component+Plugin Architecture）
-│ │ └── 描述：Agent由多个独立组件（感知、决策、通信等）组成，灵活组合与扩展。Agent核心模块可通过加载插件来动态扩展能力。
+│ ├── 4 组件+插件的组合模式架构 （Component+Plugin Architecture）
+│ └── 描述：Agent由多个独立组件（感知、决策、通信等）组成，灵活组合与扩展。Agent核心模块可通过加载插件来动态扩展能力。
 
-└── 维度二：MAS整体组织架构 从agent组织上 (MAS Architecture)
+
+
+
+---
+
+
+
+
+└── 维度二：MAS整体组织架构 从agent的组织上 (MAS Architecture)
 │
 │
-二。1  agent-centric 即系统组织上由agent主导 环境只作为可选的信息交给agent 利于特定工作
+一  agent-centric 即系统组织上由agent主导 环境只作为可选的上下文信息交给agent 利于特定工作。【agent目前基本都支持可变能力 但有定义好的能力边界（感知、决策、行动等） 难以修改和扩展。】
 │
+│其下可以分为
 │
+1  pipeline架构 写死的一套流程 或者提供一套通用流程编辑工具 确定的图结构 确定的输入输出 点对点式的交互。
 │
+2 分层架构 (Layered Architecture) 不像pipelineine写死流程 自动拆解 动态更新任务 动态的输入输出 但也具有核心目标 如deepresearch等过程
+ └── 描述：按抽象级别或功能将能力组织成堆叠的层次。其中可以包含中心化与去中心化等分类  要么有领导者等 联邦式/协作式/投票式/市场式/竞争式 的结构；要么是集体智能。去中心化
+
+二。society-centric 即系统必须包含社会环境信息 且先有社会再有agent  包括但不限于环境/事件驱动行动  利于社会模拟
 │
-二。2 society-centric 即系统必须包含环境信息 且先有环境再有agent 利于社会模拟
-│
-│
-├── 2. 分层/等级式架构 (Hierarchical Architecture)
-│ └── 描述：Agent被组织成一个命令链，分级管理。 注意 其中包括
-│
-│ 微内核架构 （Microkernel Architecture）  Microkernel achitecture with a modular core system
+│ 1 目前有的模拟框架。基本都类似于上述 agent-centric 的 写死的模拟逻辑。？存疑 去看看类似社会模拟的mas系统 非框架的工作：【斯坦福小镇。agent society。 KsanaDock/Microverse（很新的一个模拟应用） 。GPTeam。 aivilization】
+│ ？ harnesslabs/arbiter 事件驱动的模拟智能合约的具体应用的框架（受控的沙箱环境中，构造 agent（代理、行为体）去与合约交互、发起交易、设置策略、模拟复杂经济 / 机制安全（mechanism security）场景）
+ 。  OpenBMB/AgentVerse 去年的框架了 也支持互动模拟 但是没用真正意义上的环境。
+
+
+│  2 微内核架构 （Microkernel Architecture）  Microkernel achitecture with a modular core system
 │ └── 描述：核心系统负责最核心基本的功能，扩展通过加载插件来实现。它有一个轻量级的核心，其他模块独立、可插拔。
-
-
-└── 3. 去中心化/分布式架构 (Decentralized/Distributed Architecture)
-│
-├── 3.1 联邦式/协作式 (Federated/Cooperative)
-│ └── 描述：Agent通过协商、投票等方式进行合作。
-│
-├── 3.2 市场式/竞争式 (Market-Based/Competitive)
-│ └── 描述：Agent通过市场机制（如拍卖）进行资源竞争。
-│
-├── 3.3 群集式 (Swarm-based / Holonic)
-│ └── 描述：大量简单Agent通过局部规则实现集体智能。
-│
-└── 3.4 点对点式 (Peer-to-Peer, P2P)
-└── 描述：每个Agent直接与其他Agent交互。
-
+  注意 这个架构不仅仅指agent具有的核心与拓展功能。核心理念是指整个系统具有controller中控 且agent act env sys模块都有核心组件和外部插件。
 

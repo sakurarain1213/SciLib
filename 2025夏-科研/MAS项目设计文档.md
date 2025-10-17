@@ -3075,45 +3075,6 @@ TODO 前端回放需求：单独为unity开一个DB 存储每tick收到的socket
 
 
 TODO 周二下午讨论
-调研分类问题
-mas框架目前都是开发者在提定义
-暂定分类见照片 要提出比较完备 命名合理的架构分类
-【1 单体 2 单体分布式 3 （微服务 但很少用） 4 自己提出的micro-component 再议】
-【新版分类 分层架构 如camel;pipeline架构如scope; 微内核 with modular core 如我们;】
-目前有的多智能体框架
-
-MetaGPT（强SOP鼻祖（标准操作程序） 多 Agent 团队）  
-AutoGen （事件驱动/编程式的 Agent 框架）
-LangGraph（流程图 dify可视化）
-AutoGPT
-以高效任务分解和角色职责为核心，
-CrewAI （集中式控制的协作）
-Camel  1.4w star （回合驱动 剧本注入）
-AgentScope（分布式 SOP actor based 消息传递 编排）
-
-BeeAI
-
-生成式模拟范式
-AgentSociety 模拟应用 
-TradingAgents 2w star【聚焦于金融交易的具体功能的具体应用框架】
-agno 3w star（类似langgraph）支持多模态 做应用到框架 灵活度大的py框架 偏向agent 可以有team。有rag有推理 支持五个级别的agent 从工具 知识 记忆 到状态和决策团队和工作流
-openai Agents-SDK（前身是openai/swarm 2w star）用户自行写多智能体编排   Agents是SDK的基础构建块支持工具记忆等
-open manus
-OWL
-deer-flow 1.7w star 字节基于deep research开源 无缝集成 MCP 深度研究 生成含图像的报告
-
-
-老师意见：只要能支持多智能体 无论是否是宽泛的应用 就要拉过来比较 说明为什么不适合社会模拟。
-先定义好技术点。定义社会模拟一定要具备什么技术点。比如一定要支持大规模 一定要异步通信 才能说不适合做社会模拟。
-再去做表格。
-再说架构底层“特点”有哪些（尽量往目前划分套 老师认为目前架构就这样 而且很专业 已经最底层了）。然后是各自架构的优势是什么。再看目前【所有应用框架】在社会模拟上的勾叉有哪些。
-老师最终要求任何论文 要一句话说清楚特点。high level的顶层设计，才能推销得好。
-
-
-等整理好技术点之后 去看每个框架的技术点和三大分类。
-
-
-
 
 
 okk老鼠需求：需要有一个数字框ui表示在场的老鼠数量
@@ -3203,9 +3164,88 @@ cpu：前端unity + plugin hub（oss 放源码）。
 
 1017实验室
 
+调研分类问题
+mas框架目前都是开发者在提定义
+暂定分类见照片 要提出比较完备 命名合理的架构分类
+【1 单体 2 单体分布式 3 （微服务 但很少用） 4 自己提出的micro-component 再议】
+【新版分类 分层架构 如camel;pipeline架构如scope; 微内核 with modular core 如我们;】
+目前有的多智能体框架
+
+MetaGPT  
+AutoGen 
+LangGraph
+AutoGPT
+CrewAI 
+Camel
+AgentScope
+BeeAI
+AgentSociety
+TradingAgents
+agno
+openai Agents-SDK
+open manus
+OWL
+deer-flow
 
 
+老师意见：只要能支持多智能体 无论是否是宽泛的应用 就要拉过来比较 说明为什么不适合社会模拟。
+先定义好技术点。定义社会模拟一定要具备什么技术点。比如一定要支持大规模 一定要异步通信 才能说不适合做社会模拟。
+再去做表格。
+再说架构底层“特点”有哪些（尽量往目前划分套 老师认为目前架构就这样 而且很专业 已经最底层了）。然后是各自架构的优势是什么。再看目前【所有应用框架】在社会模拟上的勾叉有哪些。
+老师最终要求任何论文 要一句话说清楚特点。high level的顶层设计，才能推销得好。
 
 
+等整理好技术点之后 去看每个框架的技术点和三大分类。
+
+
+MAS系统架构 (Multi-Agent System Architecture)
+│
+├── 维度一：Agent个体的类型
+│ │
+│ ├── 1. 整体/单体/集中 架构 
+│ │ └── 描述：Agent的所有能力（感知、决策、行动）都紧密耦合在一个单一模块中，难以修改和扩展。
+│ │
+│ └── 2. 模块化/组件化架构 (Modular/Component-Based Architecture)
+│ │
+│ ├── 2.1 分层架构 (Layered Architecture)
+│ │ └── 描述：按抽象级别或功能将能力组织成堆叠的层次。
+│ │
+│ ├── 2.2 面向服务的架构 (SOA, Service-Oriented Architecture)
+│ │ └── 描述：将Agent的能力封装成内部或外部可调用的服务。
+│ │
+│ ├── 2.3 组件+插件的组合模式架构 （Component+Plugin Architecture）
+│ │ └── 描述：Agent由多个独立组件（感知、决策、通信等）组成，灵活组合与扩展。Agent核心模块可通过加载插件来动态扩展能力。
+
+└── 维度二：MAS整体组织架构 从agent组织上 (MAS Architecture)
+│
+│
+二。1  agent-centric 即系统组织上由agent主导 环境只作为可选的信息交给agent 利于特定工作
+│
+│
+│
+│
+二。2 society-centric 即系统必须包含环境信息 且先有环境再有agent 利于社会模拟
+│
+│
+├── 2. 分层/等级式架构 (Hierarchical Architecture)
+│ └── 描述：Agent被组织成一个命令链，分级管理。 注意 其中包括
+│
+│ 微内核架构 （Microkernel Architecture）  Microkernel achitecture with a modular core system
+│ └── 描述：核心系统负责最核心基本的功能，扩展通过加载插件来实现。它有一个轻量级的核心，其他模块独立、可插拔。
+
+
+└── 3. 去中心化/分布式架构 (Decentralized/Distributed Architecture)
+│
+├── 3.1 联邦式/协作式 (Federated/Cooperative)
+│ └── 描述：Agent通过协商、投票等方式进行合作。
+│
+├── 3.2 市场式/竞争式 (Market-Based/Competitive)
+│ └── 描述：Agent通过市场机制（如拍卖）进行资源竞争。
+│
+├── 3.3 群集式 (Swarm-based / Holonic)
+│ └── 描述：大量简单Agent通过局部规则实现集体智能。
+│
+└── 3.4 点对点式 (Peer-to-Peer, P2P)
+└── 描述：每个Agent直接与其他Agent交互。
 
 

@@ -3201,7 +3201,6 @@ deer-flow
 MAS系统架构 (Multi-Agent System Architecture)
 │
 ├── 维度一：Agent个体的类型。视角在于agent本身 这个维度本来就有点局限在agent-centric 的观念上。
-│ │
 │ ├── 1. 整体/单体/集中 架构 
 │ └── 描述：Agent的所有能力（感知、决策、行动）都紧密耦合在一个单一模块中，难以修改和扩展。
 │ │
@@ -3237,7 +3236,7 @@ MAS系统架构 (Multi-Agent System Architecture)
 二。society-centric 即系统必须包含社会环境信息 且先有社会再有agent  包括但不限于环境/事件驱动行动  利于社会模拟
 │
 │ 1 目前有的模拟框架。基本都类似于上述 agent-centric 的 写死的模拟逻辑。？存疑 去看看类似社会模拟的mas系统 非框架的工作：【斯坦福小镇。agent society。 KsanaDock/Microverse（很新的一个模拟应用） 。GPTeam。 aivilization】
-│ ？ harnesslabs/arbiter 事件驱动的模拟智能合约的具体应用的框架（受控的沙箱环境中，构造 agent（代理、行为体）去与合约交互、发起交易、设置策略、模拟复杂经济 / 机制安全（mechanism security）场景）
+│ ？ harnesslabs/arbiter 事件驱动的模拟智能合约的具体应用的框架（受控的沙箱环境中，构造 agent（代理、行为体）去与合约交互、发起交易、设置策略、模拟复杂经济 / 机制安全场景）
  。  OpenBMB/AgentVerse 去年的框架了 也支持互动模拟 但是没用真正意义上的环境。
 
 
@@ -3245,3 +3244,53 @@ MAS系统架构 (Multi-Agent System Architecture)
 │ └── 描述：核心系统负责最核心基本的功能，扩展通过加载插件来实现。它有一个轻量级的核心，其他模块独立、可插拔。
   注意 这个架构不仅仅指agent具有的核心与拓展功能。核心理念是指整个系统具有controller中控 且agent act env sys模块都有核心组件和外部插件。
 
+
+----------
+
+1020 实验室
+
+okk
+交付框架对比表格
+
+TODO okk
+unity开会 老鼠的文档转发到群里
+催一下后端的可调用的接口 发布接口文档
+催一下建筑绘制问题 控制一下画风
+
+
+unity部分：场景问题最大
+道具需求和例子图先给一批【或者ai绘图 diffusion调研。 像素编辑软件。 】
+交给雨虹画
+
+建筑要求原子化瓷砖和墙体素材；地标建筑直接贴图；
+交给自己搭建即可。
+
+脚本照常写
+
+
+----------
+
+1021 实验室
+
+
+下午把老鼠文档给zy
+
+选风格 -> 风格hub -> 图片先统一风格化再到像素化。最后建流水线批量生成
+
+参考风格：水墨 莫奈等印象派 美式海报
+小人要同步更改 适配style
+
+目前效果最好、最主流的模型是基于 Diffusion Model (扩散模型) 的方案，并且结合 ControlNet 和 IP-Adapter 的技术。
+
+关键词：image style transfer Content-Preserving
+现成仓库考虑：
+instantX
+
+
+
+----------
+
+1022 实验室
+先运行桌面CV项目 生成一批例子 等老师反馈。
+
+再考虑diffusion sdxl管线，晚上提供给会议同学。

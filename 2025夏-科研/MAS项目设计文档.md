@@ -3436,6 +3436,7 @@ okk。道具摆放优化 自己做。
 录制视频日
 
 目前前端的运行文档：
+0 先启动python脚本http1
 1 【若不改变碰撞图层】目前运行前要选中game manager图层 右侧拖入碰撞grid。拖入path script 。并且manager自身要拖入对话气泡下的grid。
 2 【若改变碰撞图层】jx文件夹下的key point的关键位置点可以趁机调整一下。
 new一个test图层 把path脚本挂到test图层上 运行一次。再把blocked脚本里挂上test图层 再运行一次，即可在resource下生成对应的文件即可。然后删除图层test
@@ -3443,13 +3444,449 @@ new一个test图层 把path脚本挂到test图层上 运行一次。再把blocke
 
 todo 跟jx同步一下
 目前的问题：依然是性能【最终要求并行读取每条动作消息 保证所有人都在行动！ 不要串行读取消息 导致很多角色原地踏步】
+吞吐量 去core的 citizen manager里看消息吞吐量的问题 看看怎么解决。
+【个人优化了一版本 估计有gc没做的问题 需要后续debug】
+
+
+mas-unity视频剪辑台词测试。
+【
+大家好。这是mas项目的unity应用，目的是通过可视化方式展示mas系统的agent行为和可能的统计数据。
+目前演示的是校园场景。
+从场景上看，我们按照现实比例进行抽象，复刻出了浙江大学紫金港校区的基本结构，推出了精致的羊毛毡风格的场景搭建和道具铺设，为校园模拟添加了可爱的童趣。
+从功能上看，正如我们的口号：寻找平行世界的你。我们以环境和社会为基石，为一万以上规模的agent设置了各式各样的性格和关系网络，以期待用户在其中窥见自己的影子。
+我们的agent接收mas系统驱动的动作流，并进行大规模的移动，对话和状态改变。
+很多时候，校园里的agent也不乏富有哲理的发言。
+目前用户可以单击角色查看其身份等具体信息。
+
+在近期，我们也将同步推出老鼠乌托邦场景的前端模拟场景，届时我们也将可视化展示独特的动物社会学现象。敬请期待。
+】
+
+初版视频交付。okk
+
+
+----------
+
+
+1103
+
+小老鼠那边的大模型加速
+
+报销内容：
+显示器
+unity 10刀素材充值
+
+
+----------
+
+1104
+
+unity总体需求：11.14前 晚上开个会
+校园unity新需求
+- 校园人物完全替换为羊毛 排列组合5k个以内即可 然后大一点。
+- 校园场景的ui修改：口号部分变好看；校徽旁边不用实验室 直接powered by micro kernel
+- 去看agent society论文 把多元的社会模拟作用做到校园的不同区域里
+- 目前气泡ui：必须显示姓名+状态+动作（如果有动作  动作包括“与xxx聊天中”） 但是均不具体显示。  
+校园后端现在修改了消息传递 会更方便： 每个tick的log文件中的消息 会以group群聊记录来发送【两人群 多人群】 【同一个tick 人最多只会在一个group中对话】
+因此目前单击角色要显示peofile和动作详情（包括有聊天记录的也展开），相当于单击必须去查询本tick内的这个人是否有groupid事件。如果有 则根据group_id 在人头上显示出这个群的全部消息即可。【具体格式待后端提供】
+- 目前校园ui优化：可以只要1k人左右，但需要做隐藏 把建筑封顶 或者用现有的景观建筑【pos提供给后端】 人一旦进入这个建筑就隐藏 然后有顶建筑添加目前在建筑内的数字ui【表明人数】
+- 目前unity整体的优化
+【目前unity运行时间过久则变卡 考虑内存泄漏的问题 持续优化 先不管】
+
+老鼠unity新需求
+改场景 四周不变 但是楼层改成1层 一定要交付
+场景的样式单元再做改变 要求不要有接缝 均匀的纸板
+统计数据一定要好看，做好
+
+
+无人店铺问题 本周要求来训一下模型【真正搞定并行推理问题】
+【用训练后的新老模型跑一下两批结果 不需要打标 直接返回公司】
+先做好 发给公司excel即可
+
+----------
+
+1105
+出差
+无人店铺模型问题okk
+
+----------
+
+1106
+
+unity 老鼠部分
+搭建好场景 okk
+
+unity分支的合并：plasticSCM 先切换到主分支最新节点 然后右键要合并的其他分支最新点 选择最新节点的【Merge from this changeset】 解决冲突后就会更新main为最新 记得merge结束后在main提交一下即可。
+
+
+正文部分
+
+3. Example: Building a Campus Simulation
+
+This section provides a practical example. We build a simple campus simulation. This example demonstrates how the framework's core modules connect and function.
+
+We will simulate a small university campus. The simulation includes "Student" agents, campus locations, and social relationships. The goal is to show the complete workflow, from data creation to a live simulation tick.
+
+3.1 Step 1: Generate Initial Data (PCG Toolkit)
+
+First, we must create the social environment. We use the framework's Procedural Content Generation (PCG) tool. We define our world in a pcg_config.yaml file.
+
+Define Agents: We define a "Student" role. We list attributes like major and year. We also define initial states like energy: 100. The PCG tool runs and generates two files:
+
+profiles.jsonl: Stores static data (e.g., {"id": "Student A", "role": "Student", "major": "Computer Science"}).
+
+states.jsonl: Stores dynamic data (e.g., {"id": "Student A", "energy": 100, "happiness": 70}).
+
+Define Environment (Space): We define a world_size in the config. The PCG tool generates initial positions for all agents in agents.jsonl. We also manually create an objects.jsonl file. This file lists static campus locations like {"id": "Library", "position": [10, 15]} and {"id": "Dormitory", "position": [50, 20]}.
+
+Define Environment (Relations): We define a rule for "Roommate". This rule connects two "Student" agents if they share the same "Dormitory". The PCG tool processes this rule and generates an edges.jsonl file. This file defines the social graph (e.g., {"source": "Student A", "target": "Student B", "type": "Roommate"}).
+
+We now have all the "injectable social information" for our simulation.
+
+3.2 Step 2: Configure the Simulation (YAML Files)
+
+Next, we declare our simulation's structure using YAML configuration files. These files tell the framework which code modules (Plugins) to load. The registry.py file maps the string names in our YAML to the actual Python classes.
+
+Main Config (simulation_config.yaml): This is the entry point. We link all other configuration files here. We also point to the data files we generated in Step 1.
+
+# simulation_config.yaml
+configs:
+  environment: "environment_config.yaml"
+  actions: "actions_config.yaml"
+  agent_templates: "agents_config.yaml"
+  system: "system_config.yaml"
+  database: "db_config.yaml"
+  models: "models_config.yaml"
+
+data:
+  agent_profiles: "data/profiles.jsonl"
+  agent_states: "data/states.jsonl"
+  relation_edges: "data/edges.jsonl"
+  map_objects: "data/objects.jsonl"
+
+
+Database Config (db_config.yaml): We define our database connections. For this example, we register a RedisKVAdapter (for agent state) and a RedisGraphAdapter (for social relations).
+
+Model Config (models_config.yaml): We define our Large Language Model (LLM). We register an OpenAIProvider and provide our LLM's API endpoint. The Plan and Reflect components will use this model.
+
+3.3 Step 3: Define Core Modules (Components and Plugins)
+
+We now connect our data and code. We do this in the YAML files for Agent, Environment, and Action. We assign specific Plugins (our code) to the framework's Component (slots).
+
+Environment (environment_config.yaml): We build the world.
+
+We assign BasicSpaceTimePlugin to the SpaceEntityComponent. We configure this plugin to load our map_objects.jsonl data.
+
+We assign RelBasicOpsPlugin to the RelationComponent. We configure this plugin to use our RedisGraphAdapter and load the relation_edges.jsonl graph.
+
+Actions (actions_config.yaml): We define the agents' abilities.
+
+We add ExampleCommunicatePlugin to the CommunicateComponent. This plugin provides the @AgentCall function send_message().
+
+We add ExampleOtherPlugin to the OtherComponent. This plugin provides agent actions like study(), rest(), and move().
+
+Agents (agents_config.yaml): We define our "Student" agent template.
+
+# agents_config.yaml
+templates:
+  - name: "StudentAgent"
+    component_order:
+      - "perceive"
+      - "plan"
+      - "act"
+      - "state"
+      - "reflect"
+    components:
+      profile:
+        plugin:
+          ProfileStoragePlugin:
+            adapters: 
+              redis: "RedisKVAdapter"
+            profile_data: "agent_profiles"
+      state:
+        plugin:
+          StateStoragePlugin:
+            adapters:
+              redis: "RedisKVAdapter"
+            state_data: "agent_states"
+      plan:
+        plugin:
+          LinearPlannerPlugin: {}
+      act:
+        plugin:
+          LinearActPlugin: {}
+      # ... other components ...
+
+
+This configuration links all modules. For example, the ProfileStoragePlugin uses the RedisKVAdapter we defined in db_config.yaml and loads the agent_profiles data we defined in simulation_config.yaml.
+
+3.4 Step 4: Run the Simulation (The Tick Cycle)
+
+The simulation starts. The Controller manages the main loop. We will trace one agent, "Student A", for a single tick.
+
+System (Timer): The Timer service advances the simulation to Tick 1.
+
+Controller: The Controller instructs the AgentManager to run Tick 1 for "Student A".
+
+Agent ("Student A"): The agent executes its components in the order defined by component_order.
+
+PerceiveComponent (BasicPerceptionPlugin):
+
+The plugin runs. It asks the Controller for world information.
+
+It calls controller.run_environment("space_entity", "get_nearby_entities"). The Environment module forwards this to the BasicSpaceTimePlugin, which returns: "You are at 'Dormitory'".
+
+It calls controller.run_environment("relation", "get_relations"). The Environment module forwards this to the RelBasicOpsPlugin, which returns: "Nearby: 'Student B' (Roommate)".
+
+It checks the System Messager for new messages. There are none.
+
+The component stores its perception: "I am in 'Dormitory'. 'Student B' is here. I have 0 messages."
+
+PlanComponent (LinearPlannerPlugin):
+
+The plugin runs. It gets the perception data ("I am in 'Dormitory'").
+
+It gets state data from the StateComponent ("My energy is 50").
+
+It calls the Models (LLM) router. The prompt is: "I am a Student in my Dormitory. My energy is 50. My roommate 'Student B' is here. What should I do?"
+
+The LLM responds. The plugin processes the response and sets the internal plan: {"action": "rest"}.
+
+ActComponent (LinearActPlugin):
+
+The plugin runs. It reads the plan: {"action": "rest"}.
+
+It calls the Controller: controller.run_action("other", "rest", agent_name="Student A").
+
+Action Module (Execution):
+
+The Controller routes the call to the Action module.
+
+The OtherComponent finds the ExampleOtherPlugin that provides the rest action.
+
+The rest() function in ExampleOtherPlugin executes.
+
+Inside the plugin, it calls the Controller again: controller.run_agent_method("Student A", "state", "set_state", key="energy", value=60).
+
+The rest() function returns ActionResult.success().
+
+StateComponent (StateStoragePlugin):
+
+The set_state method (called in the previous step) updates the agent's state in memory.
+
+The component's execute method runs. It persists the new state {"energy": 60} to the RedisKVAdapter.
+
+ReflectComponent (InsightCreationPlugin):
+
+The plugin runs. It checks if reflection is needed (e.g., end of the day). It is not. It does nothing.
+
+System (Recorder): The Recorder service logs the events of Tick 1 (e.g., "Student A executed 'rest'", "Student A state 'energy' changed to 60") into a database.
+
+This tick is now complete. The Controller will wait for the Timer to start the next tick.
+
 
 
 
 ----------
 
-1102
+1107
+晚九开会
+验收一下unity新素材和程序
+上传一下老鼠的最新log 等校园场景最新log
 
-目前运行前端的流程
 
-来训一下模型
+需要购买域名
+【unity研判一下 打包成webGL需要多少核心的cpu服务器 用于前端运行】
+
+
+
+【下周二晚上之前】 todo
+technique report任务：通俗易懂简单英语。一般现在时 现在完成时；单从句；主动语态大多数。逻辑一定要连贯chain，总分。
+1 写overview的example的部分 一页 短小精悍 以用户视角 帮助用户构建一个校园 串联所有概念 快速理解。
+【
+有一个用llm驱动的多agent的，以社会环境为中心的，架构具有系统 控制 agent 动作 环境为core的，agent和社会具有能力基座的，具体功能可以插件插拔的，社会信息可注入 参数可配置的社会模拟的框架项目。那么怎么通过构建一个模拟校园的例子，用上所有典型的框架内结构，向读者展示框架具体定义和用法的例子文章，如何书写？
+【添加源码】
+【添加写作要求】
+】
+
+```
+写作逻辑（总分结构）
+总述逻辑链：
+从用户视角切入：假设读者第一次使用该框架，希望“构建一个校园社会模拟”。
+说明目标：要让读者在一页内理解每个模块（agent, environment, action, controller, system）是做什么、怎么交互。
+逐层展开：
+Step 1: 定义目标社会（校园）；
+Step 2: 定义 agent 类型（学生/教师等）；
+Step 3: 定义环境（空间 + 社会关系）；
+Step 4: 定义动作（交谈、上课、移动）；
+Step 5: 定义系统服务（计时、消息、记录）；
+Step 6: 控制器统一协调；
+Step 7: 展示配置文件与运行方式；
+Step 8: 总结微内核如何支持灵活扩展。
+每段都体现因果逻辑（why → how → what）。
+可直接使用的 Example Section 英文写作草稿
+
+（可放入论文中的 \subsection{Example} 部分）
+
+写作技巧建议
+用“表格 + 小段文字”解释模块职责，效果比代码片段更清晰；
+强调“plug-and-play”“decoupled”“unified API gateway”“reusability”；
+结尾一句必须回扣“microkernel”的优点；
+整段篇幅控制在 1～1.5 页（论文页）；
+如果希望更形象，可配一个图（展示 agent–environment–controller–system 的连接）。
+
+
+正文：继续润色，提供一切上下文
+
+Example: Building a Campus Simulation with Agent-Kernel
+
+This section presents a complete example to demonstrate how users can build a social simulation with the Agent-Kernel framework.
+We use a university campus as the target society  (TODO
+ explain the campus is a small-scale but rich society.)   to simulate how tens of thousands of students and teachers live, communicate, and act in a dynamic environment.
+
+Step 1.  Define the Society
+
+A campus includes people (agents), places& relations (environment), and activities (actions).
+The simulation runs under a unified microkernel system that controls time, message passing, and recording （and so on ；need explain more core functions ）.
+Each part is implemented as 【a set of components as the 基座  and each component is impled by a specific  user modified plugin （鉴于action的复杂度 action的一个基座可以插入多个plugin实现）】  so that users can easily replace or extend it.【这里需要一个例子】
+
+Step 2.  Create Agents
+
+an agent is not a monolithic program.
+It is a container【 todo ： ”container“ this word is not accurate , decide to change】 of components, each representing one aspect of behavior.
+For the campus case, we create two types of agents: students and teachers.  (but they share the same config structure)
+
+Each agent includes the following standard components:
+
+Component	Description	Example Plugin
+ProfileComponent	stores name, role, background	StudentProfilePlugin
+PerceiveComponent	receives environment and message info	CampusPerceivePlugin
+PlanComponent	generates goals such as “attend class”	StudyPlanPlugin
+ActComponent	executes actions like move or talk	CampusActionPlugin
+StateComponent	maintains beliefs and emotions	EmotionStatePlugin
+ReflectComponent	summarizes and learns after actions	SelfReflectPlugin
+
+During each tick, the agent executes perceive → plan → act → state → reflect.
+【todo: explain that this process / flow also can be config and modified 顺序也可以调整 】
+For example, a student perceives that a class is starting, plans to go to the classroom, acts by moving, updates its state, and reflects on its performance。具体来说 【感知一般是message的形式】【计划也可以在执行完一个act之后根据动作result动态改变后续plan 即发生replan。】【reflect一般发生在一套plan步骤完全结束后 当然用户也可以自定义反思的时机和频率】. 从上述解释就可以发现agent模块具有极高的组合自由度和具体插件自由度。
+
+Step 3.  Build the Environment
+
+The environment defines the shared world where all agents live.
+It also follows the component–plugin pattern.
+
+一个典型的环境具有如下的组件基座：
+Environment Component	Role	Example Plugin
+SpaceEntityComponent	defines the spatial map	CampusMapPlugin (with positions of dorms, classrooms)
+RelationComponent	tracks social connections	FriendshipRelationPlugin
+
+When an agent calls Environment.run("SpaceEntityComponent", "move_to", position),
+the environment updates the agent’s position.【例如xxxx】
+
+【此外 用户可以在导入一系列agent的时候以kv形式定义关系图和关系强度 每个关系也会随着simulation运行的过程中动态改变。例如xxxx】
+
+All such interactions go through a unified API gateway, so users can change the physics or topology plugin without touching any agent code.
+
+
+Step 4.  Define Actions
+Actions are discoverable and callable services.
+Each ActionComponent manages a group of related plugins.
+
+一个典型的act模块具有如下的组件基座：
+Action Component	Description	Example Plugin
+CommunicateComponent	handles message exchange	ChatPlugin (agent-to-agent talk)
+ToolsComponent	provides utility functions	QuerySchedulePlugin (check class time)
+
+A student can call Action.run("CommunicateComponent", "send_message", to="teacher_1", content="Can I ask a question?").
+The controller routes this call, executes the plugin, and returns the result.
+
+ToolsComponent则更加丰富...【这里具有一系列用户自定义的工具动作 例如xxxx， 甚至支持mcp形式的外部工具调用】
+
+
+
+Step 5.  System Services
+
+The System module maintains the global order of the society.
+It provides three built-in services:
+
+系统具有固定的组件结构以便xxx。
+System Component	Function
+Timer	controls the global tick of the simulation
+Messager	routes and filters all messages
+Recorder	logs every event for later analysis
+
+For example, Messager ensures that only valid messages pass between agents.【例如校园里】
+Recorder stores the dialogue history in a database, and Timer drives all modules in sync.
+
+
+
+Step 6.  Controller as the Mediator
+
+The Controller coordinates all modules.
+Agents never talk to the environment or system directly;
+they send all requests through the Controller, such as:
+
+controller.run_action(agent_id, "CommunicateComponent", "send_message", **params)
+controller.run_environment("SpaceEntityComponent", "move_to", x=10, y=5)
+
+This design keeps the entire framework decoupled and makes monitoring, permission checking, and logging straightforward.
+【【最强大的功能是利用Recorder进行回滚】】
+
+Step 7.  Initialize and Run
+
+A user only needs to prepare a configuration folder (e.g., configs/) containing:
+simulation_config. yaml (global settings),
+agents_config. yaml (agent templates),
+environment_config. yaml (map and relation),
+system_config. yaml (Timer, Messager, Recorder),
+and optional data files (e.g., profiles. jsonl, space.jsonl).
+Then run:
+python -m agentkernel_distributed.run --project_path ./campus_sim
+The Builder class automatically loads all configs, injects agent and environment data, initializes Ray actors for each module, and starts the simulation.
+
+Step 8.  Observe and Extend
+
+Once running, the system can visualize interactions such as:
+students chatting in the library,
+teachers broadcasting announcements,
+the relation network evolving over time.
+Users can extend the simulation simply by adding new plugins (for example, ExamPlugin or WeatherPlugin) without changing the core code.
+This demonstrates the microkernel advantage:
+the kernel remains stable, while all 【外部功能】social behaviors are modular and replaceable.
+
+Summary
+This campus simulation showcases how every part of the Agent-Kernel framework works together:
+Agent provides adaptive individual behavior;
+Environment defines the shared world;
+Action exposes callable capabilities;
+System maintains time, messages, and data;
+Controller coordinates all components.
+Through these 【模块与组件构成的中心micro kernal，以及高度自由可拓展的外部plugin】, the microkernel architecture supports a scalable, configurable, and interpretable LLM-based social simulation.
+
+
+```
+
+
+2 写一下compare mas系统的部分。
+
+
+
+----------
+
+1108
+
+加班
+1 课程报告 课程打印ppt
+2 辅导员相关手续修改和打印
+
+3 overleaf写作
+
+4 unity监制
+【todo】两个主角之一 就用求是小鸡的羊毛化 圆圆的。第二个新生主角先用npc占位符，再想想有什么故事可以讲。
+
+
+
+
+
+
+
+

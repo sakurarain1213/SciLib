@@ -3725,148 +3725,128 @@ Step 8: 总结微内核如何支持灵活扩展。
 每段都体现因果逻辑（why → how → what）。
 可直接使用的 Example Section 英文写作草稿
 
-（可放入论文中的 \subsection{Example} 部分）
-
-写作技巧建议
-用“表格 + 小段文字”解释模块职责，效果比代码片段更清晰；
-强调“plug-and-play”“decoupled”“unified API gateway”“reusability”；
-结尾一句必须回扣“microkernel”的优点；
-整段篇幅控制在 1～1.5 页（论文页）；
-如果希望更形象，可配一个图（展示 agent–environment–controller–system 的连接）。
 
 
-正文：继续润色，提供一切上下文
+【需要在前置章节先完整介绍架构，然后在本节略过架构设计，直接讨论具体场景】
 
-Example: Building a Campus Simulation with Agent-Kernel
+框架采用微内核架构，由一个稳定核心和一个可扩展外部层组成。
+稳定核心：由**模块（Module）和组件（Component）**构成。
+模块：代表社会模拟的核心支柱，如“智能体”和“环境”。
+组件：构成模块的基础功能基座，由框架提供，是稳定且标准化的。
+可扩展外部层：由**插件（Plugin）**组成。
+插件：实现具体业务逻辑的地方。用户通过编写自己的代码并将其“插入”到相应的组件中，来赋予模拟世界独特的行为和规则，而无需改变核心框架。
 
-This section presents a complete example to demonstrate how users can build a social simulation with the Agent-Kernel framework.
-We use a university campus as the target society  (TODO
- explain the campus is a small-scale but rich society.)   to simulate how tens of thousands of students and teachers live, communicate, and act in a dynamic environment.
+模拟的微内核由五个模块共同构成：System，Controller，Agent，Environment  ，Action，它们为上层的所有复杂行为提供了稳定可靠的运行基础。
 
-Step 1.  Define the Society
+系统 (System) 模块：是模拟世界的“法则”，提供全局服务以确保秩序。它包含三个不可或缺的内置组件，其固定的结构为整个模拟提供了可预测性和稳定性：Timer：确保所有智能体的时间同步，按“滴答”(tick)为单位统一推进模拟。
+Messager：处理所有智能体之间的通信，如同一个中央邮局，并可配置通信规则。
+Recorder：将模拟中发生的一切记录下来，为后续的分析和复现提供数据支持。
 
-A campus includes people (agents), places& relations (environment), and activities (actions).
-The simulation runs under a unified microkernel system that controls time, message passing, and recording （and so on ；need explain more core functions ）.
-Each part is implemented as 【a set of components as the 基座  and each component is impled by a specific  user modified plugin （鉴于action的复杂度 action的一个基座可以插入多个plugin实现）】  so that users can easily replace or extend it.【这里需要一个例子】
+控制器 (Controller) 模块：是整个社会的“中央协调器”，由核心函数构成。所有模块之间（例如，一个智能体想要与环境交互）的通信都必须通过它。这种设计确保了所有行为都受到统一的管理，使得权限控制、状态追溯和调试变得异常简单。其最强大的功能之一是，控制器可以利用系统级别的快照和日志执行回滚操作，让模拟“时间倒流”到某个特定时刻。
 
-Step 2.  Create Agents
+Agent
+一个**智能体（Agent）**并非固化的程序，而是一个由多个组件组合而成的容器模块。每个组件负责一项专门的职能。其行为由一套通用的组件结构驱动：
+ProfileComponent (档案组件)：存储静态信息，如身份、属性等。
+PerceiveComponent (感知组件)：负责接收外界信息。
+PlanComponent (规划组件)：负责制定计划和目标。
+ActComponent (行动组件)：负责执行具体动作。
+StateComponent (状态组件)：管理智能体的内部动态，如情绪、信念。
+ReflectComponent (反思组件)：让智能体从经验中学习和总结。
 
-an agent is not a monolithic program.
-It is a container【 todo ： ”container“ this word is not accurate , decide to change】 of components, each representing one aspect of behavior.
-For the campus case, we create two types of agents: students and teachers.  (but they share the same config structure)
+Environment
+环境 (Environment) 模块定义了所有智能体赖以生存和互动的共享世界。它同样采用组件-插件模式，主要由以下组件构成：
+SpaceEntityComponent (空间组件)：负责管理世界的物理空间，如位置、坐标等。
+RelationComponent (关系组件)：负责管理智能体之间的社交网络。
 
-Each agent includes the following standard components:
-
-Component	Description	Example Plugin
-ProfileComponent	stores name, role, background	StudentProfilePlugin
-PerceiveComponent	receives environment and message info	CampusPerceivePlugin
-PlanComponent	generates goals such as “attend class”	StudyPlanPlugin
-ActComponent	executes actions like move or talk	CampusActionPlugin
-StateComponent	maintains beliefs and emotions	EmotionStatePlugin
-ReflectComponent	summarizes and learns after actions	SelfReflectPlugin
-
-During each tick, the agent executes perceive → plan → act → state → reflect.
-【todo: explain that this process / flow also can be config and modified 顺序也可以调整 】
-For example, a student perceives that a class is starting, plans to go to the classroom, acts by moving, updates its state, and reflects on its performance。具体来说 【感知一般是message的形式】【计划也可以在执行完一个act之后根据动作result动态改变后续plan 即发生replan。】【reflect一般发生在一套plan步骤完全结束后 当然用户也可以自定义反思的时机和频率】. 从上述解释就可以发现agent模块具有极高的组合自由度和具体插件自由度。
-
-Step 3.  Build the Environment
-
-The environment defines the shared world where all agents live.
-It also follows the component–plugin pattern.
-
-一个典型的环境具有如下的组件基座：
-Environment Component	Role	Example Plugin
-SpaceEntityComponent	defines the spatial map	CampusMapPlugin (with positions of dorms, classrooms)
-RelationComponent	tracks social connections	FriendshipRelationPlugin
-
-When an agent calls Environment.run("SpaceEntityComponent", "move_to", position),
-the environment updates the agent’s position.【例如xxxx】
-
-【此外 用户可以在导入一系列agent的时候以kv形式定义关系图和关系强度 每个关系也会随着simulation运行的过程中动态改变。例如xxxx】
-
-All such interactions go through a unified API gateway, so users can change the physics or topology plugin without touching any agent code.
+Action
+动作 (Action) 模块是智能体可以执行的具体能力集合，它像一个可被发现和调用的“服务中心”。为了更好地对动作进行组织和归类，它支持在一个组件基座下插入多个插件，每个 ActionComponent 负责管理一组功能相近的插件。常见的组件包括：
+CommunicateComponent (交流组件)：聚合所有与沟通相关的动作。
+ToolsComponent (工具组件)：提供一系列通用或专用的工具。
 
 
-Step 4.  Define Actions
-Actions are discoverable and callable services.
-Each ActionComponent manages a group of related plugins.
-
-一个典型的act模块具有如下的组件基座：
-Action Component	Description	Example Plugin
-CommunicateComponent	handles message exchange	ChatPlugin (agent-to-agent talk)
-ToolsComponent	provides utility functions	QuerySchedulePlugin (check class time)
-
-A student can call Action.run("CommunicateComponent", "send_message", to="teacher_1", content="Can I ask a question?").
-The controller routes this call, executes the plugin, and returns the result.
-
-ToolsComponent则更加丰富...【这里具有一系列用户自定义的工具动作 例如xxxx， 甚至支持mcp形式的外部工具调用】
+模拟的启动与扩展。
+一个模拟世界，最初仅通过简单的 YAML 配置文件（定义了智能体模板、环境布局、数据库连接等）和一个命令即可启动。框架的 Builder 类会自动加载所有配置，注入初始数据，在后台初始化所有模块，并运行。
 
 
 
-Step 5.  System Services
-
-The System module maintains the global order of the society.
-It provides three built-in services:
-
-系统具有固定的组件结构以便xxx。
-System Component	Function
-Timer	controls the global tick of the simulation
-Messager	routes and filters all messages
-Recorder	logs every event for later analysis
-
-For example, Messager ensures that only valid messages pass between agents.【例如校园里】
-Recorder stores the dialogue history in a database, and Timer drives all modules in sync.
 
 
 
-Step 6.  Controller as the Mediator
 
-The Controller coordinates all modules.
-Agents never talk to the environment or system directly;
-they send all requests through the Controller, such as:
 
-controller.run_action(agent_id, "CommunicateComponent", "send_message", **params)
-controller.run_environment("SpaceEntityComponent", "move_to", x=10, y=5)
 
-This design keeps the entire framework decoupled and makes monitoring, permission checking, and logging straightforward.
-【【最强大的功能是利用Recorder进行回滚】】
+【以下是校园example】
 
-Step 7.  Initialize and Run
+现在，让我们看看在一个生动的运行着“大学校园”的模拟世界中，框架的各个部分在做什么。校园是一个理想的例子，因为它代表了一个小规模但丰富而复杂的社会系统，完成了不同的角色，复杂的关系和动态的互动，使其完美地展示了框架的功能。我们将模拟成千上万的学生和老师如何在这个动态的环境中生活、交流和行动。
 
-A user only needs to prepare a configuration folder (e.g., configs/) containing:
-simulation_config. yaml (global settings),
-agents_config. yaml (agent templates),
-environment_config. yaml (map and relation),
-system_config. yaml (Timer, Messager, Recorder),
-and optional data files (e.g., profiles. jsonl, space.jsonl).
-Then run:
-python -m agentkernel_distributed.run --project_path ./campus_sim
-The Builder class automatically loads all configs, injects agent and environment data, initializes Ray actors for each module, and starts the simulation.
+并且这个校园模拟的例子恰恰能体现微内核架构的优势：微内核保持稳定，而所有外部插件都是模块化的，可以被灵活替换和扩展。
 
-Step 8.  Observe and Extend
 
-Once running, the system can visualize interactions such as:
-students chatting in the library,
-teachers broadcasting announcements,
-the relation network evolving over time.
-Users can extend the simulation simply by adding new plugins (for example, ExamPlugin or WeatherPlugin) without changing the core code.
-This demonstrates the microkernel advantage:
-the kernel remains stable, while all 【外部功能】social behaviors are modular and replaceable.
+在运行校园场景的前置准备中，用户已经导入了配置文件（定义了智能体模板、环境布局、数据库连接等）。例如：
+主配置定义了模拟的总时长，并指定了其他配置文件的路径。
+智能体模板规定了每个agent的profile信息和具体组件的运行顺序。
+环境配置指定了具体的数据源，例如加载校园建筑空间信息和角色关系。
+数据库配置定义了连接池，并声明了适配器来使用这个连接池。
 
-Summary
-This campus simulation showcases how every part of the Agent-Kernel framework works together:
-Agent provides adaptive individual behavior;
-Environment defines the shared world;
-Action exposes callable capabilities;
-System maintains time, messages, and data;
-Controller coordinates all components.
-Through these 【模块与组件构成的中心micro kernal，以及高度自由可拓展的外部plugin】, the microkernel architecture supports a scalable, configurable, and interpretable LLM-based social simulation.
+系统 (System) 模块：
+Timer：正在以tick为单位驱动校园时间的流逝，例如可以定义每48个 tick 代表校园内的24小时。
+Messager：正在处理学生与老师之间的消息。例如，它会根据配置好的规则，阻止一个普通学生直接向校长发送消息，从而维持校园内真实的社交层级。
+Recorder：正在记录所有学生的选课、移动和对话等等丰富的数据。通过分析这些数据，我们可以研究各种感兴趣的现象，例如不同专业学生之间的社交圈差异。
+
+控制器 (Controller) 模块：
+它作为“中央协调器”，确保所有互动合乎规则。例如，当一个学生试图在考试期间执行“交谈”动作时，控制器会拦截该请求，以维持考场纪律。
+它最强大的功能之一是回滚。我们可以利用控制器将整个校园模拟“时间倒流”到某个特定时刻，用于进行“假如……会怎样？”的推演分析，比如分析一场突发事件对学生社交网络的影响。
+
+校园里的“居民”：agent（学生与教师）
+在这个校园里，每个学生和老师的行为都由其内部的一系列组件和插件驱动：
+ProfileComponent 中的“学生档案插件”存储着他们的静态信息，如姓名、专业、年级。
+PerceiveComponent 中的“校园感知插件”让他们能够“看到”周围的同学，或“收到”来自教务系统的上课提醒。
+PlanComponent 中的“学习规划插件”帮助一个学生生成了“上午10点去教室上课”的目标。
+ActComponent 中的“校园行动插件”包含了具体的“移动”或“交谈”逻辑，使学生能够实际走到教室或与人对话。
+StateComponent 中的“情绪状态插件”正在追踪一个学生的内部状态，例如，在上完一节课后，他的“精力”值可能会从“充沛”变为“疲惫”。
+ReflectComponent 中的“自我反思插件”让一个学生可以在一天结束后，回顾并总结当天的对话和学习内容，形成新的记忆。
+这个过程展示了智能体行为的完整闭环：感知 -> 规划 -> 行动 -> 状态更新 -> 反思。这个流程本身也是高度可配置的，用户不仅可以定义每个步骤的具体逻辑，还可以调整它们的执行顺序和所花费的时间（tick 数），从而提供了极高的自由度。一个典型的场景是：学生A通过感知得到一条来自学生B的打招呼消息。A的Plan插件检查到新消息，并结合A当前的“社交需求”state，决定生成一个回复B的计划。Actc插件执行该计划，调用发送消息的动作，并在对话结束后更新A的“社交需求”state与“精力”state， 因社交和思考而略微减少。最终在一天结束时，A的反思插件总结今天与B的对话，生成一条“今天和B聊得很开心”的记忆，并将其存入数据库。当然，用户也可以在配置文件中修改这些组件的执行顺序，例如创造一个在行动前会先反思历史的、更为深思熟虑的校园智能体。
+
+共享的“世界”：Environment（校园环境）
+环境 (Environment) 模块 定义了整个校园的物理和社交空间：
+SpaceEntityComponent 中的“校园地图插件”定义了图书馆、教学楼、宿舍等所有建筑的位置坐标。当一个学生执行“移动”动作时，正是这个插件在后台更新了他的坐标。
+RelationComponent 中的“社交关系插件”正在动态管理师生间的社交网络。如果两个学生频繁交谈，该插件会根据其个性化规则提升他们之间的“友谊”强度，这可能会解锁新的互动选项。
+这种设计的强大之处在于，可以通过简单地更换插件来彻底改变环境规则，而无需修改任何智能体的代码。例如，可以通过修改地图插件将2D校园空间内的坐标升级为3D空间坐标以丰富移动行为；又或者对于关系插件进行升级，这个插件不仅会更新他们二人的关系，还可以根据一定概率，将他们谈话的内容传播出去，影响与第三方角色的关系，从而模拟真实的“八卦”传播效应。
+
+他们能“做什么”：Action
+动作模块 为校园里的智能体提供了一系列可以执行的能力：
+CommunicateComponent 中的“聊天插件”定义了“私聊”和“群聊”的具体实现，让学生之间可以进行真实的对话。
+ToolsComponent 中的“课程表查询插件”和“图书馆搜索插件”让智能体可以获取信息。甚至可以为学生添加外部通用的MCP协议的工具，例如集成外部实际的天气查询工具，以影响校园场景角色的行动。
+通过这种方式，智能体的能力变得模块化，可以被轻松地注册发现、调用和扩展。
+
+如果想为世界增加新的可能性，只需开发一个或一系列新的插件并加入到相应的模块中，而无需触及框架的核心代码。例如，想在校园里增加“考试”事件，我们只需通过 Controller 在特定时间触发一个全局事件，让所有符合条件的学生感知到“考试开始”，他们的 Plan插件就会制定参加考试的计划，并最终把考试行为插件添加到 Act模块 中供agent实际采取考试行动。整个过程无需修改框架任何核心代码。
+
+\subsection{Example: Building a Campus Simulation with Agent-Kernel}
+
+To illustrate the framework's functionality, we construct a running simulation of a dynamic university campus where tens of thousands of students and faculty members live and interact.
+This scenario is ideal because it represents a small-scale yet rich social system, complete with diverse roles, intricate relationships, and dynamic behaviors. 
+
+This campus simulation comprehensively demonstrates the capabilities of Agent-Kernel, highlighting the primary advantage of its microkernel architecture: a stable core system with modular, flexibly replaceable, and extendable external plugins.
+
+Before running the campus simulation, the user has already imported the necessary configuration files, which define agent templates, the environment layout, database connections, and more. For instance: The main configuration file defines the total duration of the simulation and specifies the paths to other configuration files; The agent template file dictates the profile information for each agent and the execution order of its components; The environment configuration file specifies data sources, such as loading the campus building's spatial information and character relationships; The database configuration file defines connection pools and declares adapters to use these pools.
+
+The \texttt{System} module orchestrates the simulation's foundational elements. The \texttt{Timer} drives the passage of time in the campus world, measured in tick. For example, users can define that 48 ticks represent 24 hours on campus. The \texttt{Messager} processes messages between agents, and based on configured rules, it might block a regular student from sending a direct message to the university president, thereby maintaining a realistic social hierarchy. The \texttt{Recorder} logs a rich variety of data, such as students' movements and conversations. By analyzing this data, we can study various phenomena, like the differences in social circles among students from different majors.
+
+The \texttt{Controller} module acts as the central coordinator, ensuring all interactions are rule-compliant. For example, if a student attempts to perform a "talk" action during an exam, the controller will intercept the request to maintain examination discipline. One of its most powerful features is the ability to roll back the entire simulation to a specific moment in time. This allows for "what-if" analysis, such as studying the impact of a sudden event on the student social network.
+
+The \texttt{Agent} module drives the behavior of each agent, such as students and faculty, through an internal suite of components and external plugins. The \texttt{ProfileComponent} contains a "Campus Profile Plugin" that stores their static information, such as name, major and personality. The \texttt{PerceiveComponent} uses a "Campus Perception Plugin" that allows them to "see" nearby classmates or "receive" class reminders. The \texttt{PlanComponent} employs a "Campus Planning Plugin" that helps a student generate the goal "go to the classroom for a 10 AM class." The \texttt{ActComponent} includes "Campus Action Plugins" with the logic for "move" or "talk", enabling the student to physically walk to a classroom or converse with others. The \texttt{StateComponent}'s "Emotion State Plugin" tracks a student's internal state, such as when their "energy" decreases from "high" to "tired" after class. The \texttt{ReflectComponent}'s "Self-Reflection Plugin" allows a student to review and summarize the day's conversations and learning, forming new memories. This sequence demonstrates the complete cognitive loop of an agent: Perceive $\rightarrow$ Plan $\rightarrow$ Act $\rightarrow$ State Update $\rightarrow$ Reflect. This loop itself is highly configurable, as users can define the specific logic for each step and also adjust their execution order and duration (in ticks), offering immense freedom. In a typical scenario, Student A perceives a greeting message from Student B. A's \texttt{Plan} plugin processes this new message and, considering A's current "social need" state, decides to generate a plan to reply. The \texttt{Act} plugin executes this plan, calling the send message action. After the conversation, A's "social need" and "energy" states are updated. At the end of the day, A's \texttt{Reflect} plugin summarizes the conversation, generating a memory like "had a great chat with B today", and stores it in the database. Of course, users could modify the execution order of these components in the configuration file to create a more contemplative agent that reflects on past events before acting.
+
+The \texttt{Environment} module defines the physical and social space of the entire campus. The \texttt{SpaceEntityComponent}'s "Campus Map Plugin" defines the coordinates of buildings, such as the library and dormitories. When students execute the "move" action, this plugin updates their coordinates in the background. The \texttt{RelationComponent}'s "Social Relationship Plugin" dynamically manages the social network among agents—if two students converse frequently, this plugin can enhance their "friendship" strength based on personalized rules, potentially unlocking new interaction options. The power of this design is that one can completely change the environment's rules by simply swapping plugins, without modifying any agent code. For example, one could upgrade the map plugin from 2D to 3D coordinates to enrich movement behaviors. Alternatively, an upgraded relationship plugin could spread the content of conversations to third parties with a certain probability, simulating a realistic "gossip" effect.
+
+The \texttt{Action} module provides a collection of capabilities that agents can perform. The \texttt{CommunicateComponent}'s "Chat Plugin" defines the implementation of "private chat" and "group chat", allowing for realistic dialogue between students. The \texttt{ToolsComponent} provides agents with tools like a "Course Schedule Query Plugin" and a "Library Search Plugin" to retrieve information. It can even integrate external tools that follow the standard Model Context Protocol (MCP), such as a real-world weather query tool, to influence the actions of campus agents. In this way, an agent's abilities become modular, making them easy to register, discover, invoke, and extend.
+
+Crucially, new possibilities can be added by simply registering one or more plugins with the relevant modules. To introduce an "exam", for example, the \texttt{Controller} triggers a global "exam start" event at the desired time; eligible students perceive it, their \texttt{Plan} plugins schedule the sitting, and an "exam-taking" action plugin attached to the \texttt{Act} module handles execution. All without touching the framework's kernel. 
 
 
 ```
 
 
-2 写一下compare mas系统的部分。
+2 写一下compare mas系统的部分。【沟通怎么写 是否可以用表格加简短描述】
 
 
 
@@ -3875,18 +3855,48 @@ Through these 【模块与组件构成的中心micro kernal，以及高度自由
 1108
 
 加班
-1 课程报告 课程打印ppt
-2 辅导员相关手续修改和打印
+1 okk 课程打印ppt
 
-3 overleaf写作
+2 okk  overleaf写作【询问example部分是否除去架构；除去后是以构建视角还是以运行时的视角】
 
-4 unity监制
-【todo】两个主角之一 就用求是小鸡的羊毛化 圆圆的。第二个新生主角先用npc占位符，再想想有什么故事可以讲。
-
+3 unity监制
+【okk 已交付】两个主角之一 就用求是小鸡的羊毛化 圆圆的。第二个新生主角先用npc占位符，再想想有什么故事可以讲。
 
 
+----------
+
+1110
+【okk】辅导员相关手续修改和打印 
+
+okk角色绘图考虑；【见雨虹需求】【头身分离 身体用一个整体就行 正两帧侧两帧 身体再需要20种  身体细节：头发不要过肩 不要纯白的衣服  尽量要短裤】
+晚上开会阶段性验收
+
+okk 报告撰写需求【逻辑修改一下 整体不要出现componentnt。大总分（直接切入主题 不解释理由）+小总分（agent里先说循环）】
+
+Assume to simulate a campus containing multiple agents, the \texttt{Agent}, \texttt{Environment}, and \texttt{Action} modules are used to define agent behaviors, manage the shared world, and provide agent capabilities, respectively. The interaction follows a clear pattern: an \texttt{Agent} perceives the \texttt{Environment} and decides on an \texttt{Action}. The \texttt{Action} module then executes, modifying both the \texttt{Agent}'s internal state and the \texttt{Environment}. The entire simulation is orchestrated by two other core modules. The \texttt{Controller} module acts as the central coordinator, ensuring all interactions are rule-compliant. The \texttt{System} module orchestrates the simulation's foundational elements.
+
+The \texttt{Agent} module drives the behavior of each agent through an internal suite of plugins. Specifically, an agent's behavior follows a loop: Perceive → Plan → Act → State Update → Reflect. This loop is highly configurable, allowing users to adjust the logic and execution order of plugins, such as adding a contemplative agent that reflects before acting. For example, consider a student, Alice. Her Profile Plugin stores her static information. The Perceive Plugin receives a "10 AM class reminder". Based on this perception, the Plan Plugin generates a goal: "go to the classroom". The Act Plugin executes a "move" action, which updates her coordinates as she walks. If she receives a message from another agent, Bob, the Plan Plugin might decide to reply based on her current "social need" state, and the Act Plugin would execute the "send message" action. After these actions, the State Plugin updates her internal state, decreasing "energy" from "high" to "tired". At the end of the day, the Reflect Plugin reviews the day's events, summarizing conversations to form new memories like "had a great chat with Bob today".
+
+The \texttt{Environment} module defines the physical and social space of the entire campus. It manages plugins like the "Campus Map Plugin", which defines the coordinates of buildings such as the library and dormitories. It also manages a "Social Relationship Plugin" that dynamically handles the social network among agents. The power of this design is that users can completely change the environment's rules by simply swapping plugins, without modifying any agent code. For example, users could upgrade the map plugin from 2D to 3D coordinates to enrich movement behaviors. Alternatively, an upgraded relationship plugin could propagate the content of conversations to third parties with a certain probability, simulating a realistic "gossip" effect.
+
+The \texttt{Action} module provides a collection of capabilities that agents can perform. In this way, an agent's abilities become modular, making them easy to register, discover, invoke, and extend. It manages plugins like the "Chat Plugin", which defines the implementation of "private chat" and "group chat", allowing for realistic dialogue between students. It also provides agents with tools like a "Course Schedule Query Plugin" and a "Library Search Plugin" to retrieve information. It can even integrate external tools that follow the standard Model Context Protocol (MCP), such as a real-world weather query tool, to influence the actions of campus agents.
+
+The \texttt{Controller} module acts as the central coordinator. For example, if a student attempts to perform a "talk" action during an exam, the controller will intercept the request to maintain examination discipline. One of its most powerful features is the ability to roll back the entire simulation to a specific moment in time. This allows for "what-if" analysis, such as studying the impact of a sudden event on the student social network.
+
+The \texttt{System} module orchestrates the simulation's foundational elements. The Timer drives the passage of time in the campus world, measured in ticks. For example, 48 ticks represent 24 hours on campus. The Messager processes messages between agents. The \texttt{Recorder} supports viewing a rich variety of statistical indicators, such as students' movements and conversations. By analyzing these indicators, we can study various phenomena, like the differences in social circles among students from different majors.
+
+Crucially, new possibilities can be added by simply registering one or more plugins with the relevant modules. To introduce an "exam", for example, the \texttt{Controller} triggers a global "exam start" event at the desired time; eligible students perceive it, their Plan plugins schedule the sitting, and an "exam-taking" action plugin can be added to the \texttt{Action} module for agents to execute. All without touching the framework's kernel.
+
+This campus simulation comprehensively demonstrates the capabilities of Agent-Kernel, highlighting the primary advantage of its microkernel architecture: a stable core system with modular, flexibly replaceable, and extendable external plugins.
 
 
+----------
 
+1111
 
+1 【todo】金融课程报告 
 
+2  技术报告【新需求 compare other mas framework部分 【以每列的特征为段落单位 大段描述每个demension的框架的优缺点   最后放一张整体的表格即可。  打分使用三颗星星制 高中低 维度目前缩小到五个 见摘要】
+
+3 unity打包成webGL 评估硬件性能； 
+https://chatgpt.com/share/69114c4d-b5dc-800c-a577-566229ad76bb

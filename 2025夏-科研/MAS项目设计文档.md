@@ -3894,9 +3894,120 @@ This campus simulation comprehensively demonstrates the capabilities of Agent-Ke
 
 1111
 
-1 【todo】金融课程报告 
+1 【okk 待提交到邮箱即可】金融课程报告 
 
-2  技术报告【新需求 compare other mas framework部分 【以每列的特征为段落单位 大段描述每个demension的框架的优缺点   最后放一张整体的表格即可。  打分使用三颗星星制 高中低 维度目前缩小到五个 见摘要】
+2  技术报告【新需求 compare with other mas framework部分 
+【以每列的特征为段落单位 大段描述每个demension的框架的优缺点   最后放一张整体的表格即可。  
+okk打分使用三颗星星制 高中低 维度目前缩小到五个 见摘要】
+```
+While Agent-Kernel is designed for large-scale social simulation, most existing MAS frameworks are not. They are typically agent-centric, a design choice that creates significant challenges in scalability, interpretability, configurability, reliability, and reusability when applied to complex social systems. In contrast, a society-centric framework is inherently better suited to address these issues.
 
+In the agent-centric framework, the world is modeled from the individual's perspective, often embedding environment and actions within the agents themselves. Specifically, Pipeline architectures, like CrewAI and LangGraph, orchestrate agents to complete sequential tasks. Layered architectures, such as CAMEL, structure individual agent capabilities and define role-playing protocols for cooperative dialogue.
+
+To overcome these limitations, a society-centric framework establishes a shared, dynamic environment that agents depend on for decision-making, with the core goal of simulating group behavior and intelligence. Agent-Kernel adopts such a society-centric, modular microkernel architecture. This approach decouples agents from the environment and their actions, offering significant advantages across several key dimensions, as detailed in Table~\ref{tab:mas_frameworks}.
+
+
+% 需要 \usepackage{bbding}和相关脚本
+\begin{table}[htbp]
+\centering
+\caption{%
+  Comparative Capabilities of MAS Frameworks for Social Simulation:
+  Scalability (Scala.), Interpretability (Inter.), Configurability (Config.),
+  Reliability (Reli.), and Reusability (Reus.)%
+}
+\label{tab:mas_frameworks}
+\footnotesize
+\begin{tabular}{
+@{}>{\raggedright\arraybackslash}p{2.6cm}      % Framework Name
+>{\raggedright\arraybackslash}p{2.1cm}  % Conceptual Category
+>{\raggedright\arraybackslash}p{1.8cm}      % Architectural Style
+>{\centering\arraybackslash}p{1.2cm}        % Scalability
+>{\centering\arraybackslash}p{1.2cm}        % Interpretability
+>{\centering\arraybackslash}p{1.4cm}        % Configurability
+>{\centering\arraybackslash}p{1.2cm}        % Reliability
+>{\centering\arraybackslash}p{1.2cm}@{}     % Reusability
+}
+\toprule
+\textbf{Framework} &
+\textbf{Category} &
+\textbf{Architecture} &
+\textbf{Scala.} &
+\textbf{Inter.} &
+\textbf{Config.} &
+\textbf{Reli.} &
+\textbf{Reus.} \\
+\midrule
+Agent-Kernel & society-centric & Microkernel & \FS{3} & \FS{3} & \FS{3} & \FS{3} & \FS{3} \\
+AgentSociety & society-centric & Layered & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{3} \\
+AgentScope & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{3} \\
+AutoGen & agent-centric & Layered & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+DeepResearchAgent & agent-centric & Layered & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{3} \\
+BotSharp & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{1} & \FS{1} & \FS{3} \\
+LangGraph & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+OpenManus & agent-centric & Pipeline & \FS{2} & \FS{1} & \FS{2} & \FS{2} & \FS{3} \\
+MetaGPT & agent-centric & Pipeline & \FS{2} & \FS{1} & \FS{2} & \FS{2} & \FS{2} \\
+PraisonAI & agent-centric & Pipeline & \FS{2} & \FS{1} & \FS{2} & \FS{2} & \FS{3} \\
+CAMEL & agent-centric & Layered & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+BeeAI & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+CrewAI & agent-centric & Pipeline & \FS{1} & \FS{1} & \FS{1} & \FS{3} & \FS{3} \\
+Agents SDK & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+MindSearch & agent-centric & Layered & \FS{1} & \FS{1} & \FS{2} & \FS{2} & \FS{2} \\
+DeerFlow & agent-centric & Pipeline & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+AgentVerse & society-centric & Layered & \FS{2} & \FS{2} & \FS{2} & \FS{2} & \FS{2} \\
+Claude-Flow & agent-centric & Pipeline & \FS{1} & \FS{2} & \FS{1} & \FS{2} & \FS{3} \\
+OxyGent & agent-centric & Layered & \FS{1} & \FS{2} & \FS{1} & \FS{2} & \FS{2} \\
+Agno & agent-centric & Pipeline & \FS{1} & \FS{2} & \FS{1} & \FS{1} & \FS{3} \\
+TradingAgents & agent-centric & Pipeline & \FS{1} & \FS{2} & \FS{2} & \FS{2} & \FS{1} \\
+ROMA & agent-centric & Pipeline & \FS{2} & \FS{1} & \FS{1} & \FS{2} & \FS{1} \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{table}
+
+Scalability. Agent-Kernel is built for large-scale social simulations. However, agent-centric frameworks like LangGraph rely on direct interactions between agents, which creates an exponential performance bottleneck. Their distributed features are typically designed for parallelizing independent tasks, not for simulating many agents in a shared context. Agent-Kernel solves this by decoupling its core modules. The Environment serves as a single source of truth, while the Controller manages all interactions. In distributed mode, the PodManager balances agents across nodes and the central Messager handles communication asynchronously. This design avoids direct coupling bottlenecks and supports simulations with tens of thousands of agents.
+
+Interpretability. Agent-Kernel offers clearer insight into social behaviors. In agent-centric frameworks like AutoGen, an agent's decision-making is often a black box, making it difficult to trace the root causes of collective phenomena. While these tools can track an individual agent's reasoning, they struggle to explain why a group pattern, like social polarization, occurs. Agent-Kernel's society-centric design provides a clear causal chain. Because the Environment and Action modules are separate, their specific impacts can be isolated and studied. The Controller logs all interactions and the Recorder persists key events, allowing users to systematically analyze how rules and actions lead to social outcomes.
+
+
+Configurability. Agent-Kernel offers superior configurability for simulation parameters. In many agent-centric frameworks, such as AgentSociety, configuration is often limited to an agent's individual attributes. These frameworks often focus on defining a comprehensive set of social attributes for agents at the design stage, while overlooking the importance of attribute flexibility for dynamic social simulations. This results in lacking a central interface for adjusting societal parameters. Agent-Kernel addresses this through its clear separation of concerns and a declarative configuration system. Users can easily modify the simulation by changing configurations for the Agent (e.g., altering cognitive loops), Environment (e.g., swapping maps), Action (e.g., adding new tools), or System (e.g., adjusting the global tick rate). Furthermore, the Controller acts as a single entry point for making runtime changes, such as rolling back the simulation to a previous state.
+
+Reliability. Agent-Kernel ensures higher reliability, which is crucial for scientific simulation. The reliability of a simulation depends on its reproducibility and logical consistency. The asynchronous and unconstrained nature of many agent-centric frameworks can lead to unpredictable and non-repeatable results. Agent-Kernel enhances reliability through several key mechanisms. The Controller acts as a mandatory gatekeeper, preventing invalid actions and states. The global Timer synchronizes all operations, ensuring events occur in a predictable, step-by-step manner. This centralized control and synchronous progression make the entire simulation more robust and trustworthy.
+
+Code Reusability. Agent-Kernel promotes high code reusability through its plugin-based microkernel architecture. In pipeline-based frameworks like CrewAI, the logic is often tightly coupled to a specific workflow, making components difficult to reuse. While layered frameworks offer some modularity, the tight coupling between layers can still hinder reusability. Agent-Kernel's design treats plugins as interchangeable functional units. A ProfilePlugin for an agent's identity or a RelationPlugin for a social network can be easily reused across different simulations. This modularity allows developers to build a library of reusable plugins, significantly accelerating the development of new social simulation applications.
+
+It is worth noting that the landscape of MAS frameworks is vast and constantly evolving, making any comparison incomplete. Frameworks often have different target audiences, serving both enterprise and research communities. They are designed for specific domains (e.g., TradingAgents), or are part of a larger proprietary solution (e.g., Agno). Furthermore, frameworks have derivatives or wrappers, or inherit from multiple predecessors, and some may use different underlying models. Therefore, assessing a framework's capability for social simulation inevitably involves a degree of subjective interpretation based on its architectural philosophy.
+```
+
+搞一下这个
 3 unity打包成webGL 评估硬件性能； 
 https://chatgpt.com/share/69114c4d-b5dc-800c-a577-566229ad76bb
+
+----------
+
+1112
+装软件okk
+
+unity地板交付问题 问一下雨虹
+
+----------
+
+1113
+修改表格的需求
+明天开会的讨论点 见照片
+
+----------
+
+1114
+unity开会
+【雨虹的地板 通过拉伸去修正夹角】okk
+基本需求已经满足 下周一 开会即可。【校园场景搭建一下 powered by】
+
+----------
+
+1115
+加班
+按照要求md修改技术报告（注意维度描述的统一性）
+
+ppt一些绘图需求 周末做就行
+
+公司需求 train一下新数据构成的模型
